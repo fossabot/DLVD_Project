@@ -175,6 +175,4 @@ Temporary Items
 
 
 #Local Data
-localrun/
-model/
-algorithm/
+.tfmodel
