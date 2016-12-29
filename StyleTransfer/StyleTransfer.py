@@ -1,11 +1,19 @@
+import scipy.io
+import scipy.misc
 import tensorflow as tf
 import skimage
 import skimage.io
 import skimage.transform
 import numpy as np
 
+
+from matplotlib.pyplot import imshow
+
 synset = [l.strip() for l in open(
     'C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer\\model\\synset.txt').readlines()]
+
+
+
 
 
 # returns image of shape [224, 224, 3]
@@ -13,8 +21,8 @@ synset = [l.strip() for l in open(
 def load_image(path):
     # load image
     img = skimage.io.imread(path)
-    img = img / 255.0
-    assert (0 <= img).all() and (img <= 1.0).all()
+    #img = img / 255.0
+    #assert (0 <= img).all() and (img <= 1.0).all()
     # print "Original Image Shape: ", img.shape
     # we crop image from center
     short_edge = min(img.shape[:2])
@@ -23,8 +31,21 @@ def load_image(path):
     crop_img = img[yy: yy + short_edge, xx: xx + short_edge]
     # resize to 224, 224
     resized_img = skimage.transform.resize(crop_img, (224, 224))
-    return resized_img
+    return resized_img * 255.0
 
+def save_image(path, image, to255=False):
+    # Output should add back the mean.
+    #image = image + MEAN_VALUES
+    # Get rid of the first useless dimension, what remains is the image.
+    image = image[0]
+    if to255 == True :
+        image = image * 255.0
+    image = np.clip(image, 0, 255).astype('uint8')
+    scipy.misc.imsave(path, image)
+
+cat = load_image('C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer\\images\\cat.jpg')
+elch = load_image('C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer\\images\\elch.jpg')
+style = load_image('C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer\\images\\style.jpg')
 
 # returns the top1 string
 def print_prob(prob):
@@ -48,12 +69,12 @@ def calc_gram(single_picture_tensor_conv):
     return tf.matmul(tf.transpose(tensor_conv_reshape), tensor_conv_reshape)
 
 
-def load_vgg_input(path='C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer\\model\\vgg.tfmodel'):
+def load_vgg_input( images, path='C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer\\model\\vgg.tfmodel'):
     with open(path, mode='rb') as f:
         fileContent = f.read()
     graph_def = tf.GraphDef()
     graph_def.ParseFromString(fileContent)
-    images = tf.placeholder("float", [None, 224, 224, 3])
+    #images = tf.placeholder("float32", [None, 224, 224, 3])
     tf.import_graph_def(graph_def, input_map={"images": images})
     #print("graph loaded from disk")
     return tf.get_default_graph(), images
@@ -62,19 +83,30 @@ def load_vgg_input(path='C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD
 def _relu(conv2d_layer):
     return tf.nn.relu(conv2d_layer)
 
+variables = []
+
 def _conv2d(prev_layer):
-    W = tf.Variable(np.random.rand(3,3,3,3), dtype="float64")
-    b = tf.Variable(np.random.rand(3))
+    W = tf.Variable(np.random.rand(3,3,3,3), dtype="float32", name="W")
+    b = tf.Variable(np.random.rand(3), dtype="float32", name="b")
+    variables.append(W)
     return tf.nn.conv2d(prev_layer, filter=W, strides=[1,1,1,1], padding='SAME')+b
+
+
 
 def _conv2d_relu(prev_layer):
     return _relu(_conv2d(prev_layer))
 
 def build_gen_graph():
     graph = {}
-    input_image = tf.placeholder("float64", [1,224,224,3])
-    graph['gen_input'] = tf.Variable(input_image, trainable=False)
-    graph['conv1_1'] = _conv2d_relu(graph['gen_input'])
+    #input_image = tf.constant(cat.reshape(1,224,224,3), dtype="float32")
+    input_image = tf.Variable(cat.reshape(1,224,224,3), trainable=False, dtype="float32", name="input_image")
+    #graph['gen_input'] = tf.Variable(input_image, trainable=False)
+    graph['conv1_1'] = _conv2d_relu(input_image)
+    graph['conv2_1'] = _conv2d_relu(graph['conv1_1'])
+    graph['conv3_1'] = _conv2d_relu(graph['conv2_1'])
+    graph['conv4_1'] = _conv2d_relu(graph['conv3_1'])
+    graph['conv5_1'] = _conv2d_relu(graph['conv4_1'])
+    graph['output'] = _conv2d_relu(graph['conv5_1'])
     return graph, input_image
 
 
@@ -136,28 +168,34 @@ def calc_style_loss():
     return style_loss
 
 
-cat = load_image('C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer\\images\\cat.jpg')
-elch = load_image('C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer\\images\\elch.jpg')
-style = load_image('C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer\\images\\style.jpg')
-
 # 0 generiert
 # 1 content
 # 2 style
 
 gen_graph, input_image = build_gen_graph()
-gen_image = gen_graph['conv1_1']
+gen_image = gen_graph['output']
 
-batch = tf.reshape(gen_image, (1, 224, 224, 3))
-batch = tf.concat(0, [batch, cat.reshape(1, 224, 224, 3)])
-batch = tf.concat(0, [batch, style.reshape(1, 224, 224, 3)])
+#style_image = tf.Variable(trainable=False)
+style_image = tf.Variable(style.reshape(1,224,224,3) / 255.0, trainable=False, dtype="float32", name="style_image")
+
+batch = tf.divide(gen_image, 255.0)
+batch = tf.concat(0, [batch, tf.divide(input_image,255.0)])
+batch = tf.concat(0, [batch, style_image])
 assert batch.get_shape() == (3, 224, 224, 3)
 
-graph, images = load_vgg_input()
+graph, images = load_vgg_input(batch)
+
+content_loss = calc_content_loss()
+style_loss = calc_style_loss()
+loss = style_loss + content_loss
+
+#feed = {input_image: cat.reshape(1, 224, 224, 3), style_image: style.reshape(1, 224, 224, 3)}
+# feed = {images: batch, input_image : cat.reshape(1, 224, 224, 3)}
+# prob = sess.run(loss, feed)
+
+
 
 with tf.Session() as sess:
-    init = tf.initialize_all_variables()
-    sess.run(init)
-    #print("variables initialized")
 
     # set log directory
     summary_writer = tf.train.SummaryWriter(
@@ -168,13 +206,22 @@ with tf.Session() as sess:
     # 1 content
     # 2 style
 
-    content_loss = calc_content_loss()
-    style_loss = calc_style_loss()
-    loss = style_loss + content_loss
+    optimizer = tf.train.AdamOptimizer()
+    train_step = optimizer.minimize(loss)
 
-    feed_dict = {images: batch, input_image : cat.reshape(1, 224, 224, 3)}
-    prob = sess.run(loss, feed_dict=feed_dict)
 
-print(prob)
-# print(prob[1])
-# print_prob(prob[0])
+    #sess.run(input_image.assign(cat.reshape(1, 224, 224, 3)))
+    #sess.run(style_image.assign(style.reshape(1, 224, 224, 3) / 255.0))
+
+    init = tf.initialize_all_variables()
+    sess.run(init)
+
+    for i in range(20):
+        sess.run(train_step)
+        if i % 5 == 0:
+            print(sess.run(loss))
+            print(sess.run(variables[0]))
+            #save_image('C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer\\output_images\\im' + str(i) + '.jpg', sess.run(gen_image))
+            #print(sess.run(gen_graph['conv1_1'], feed_dict=feed))
+
+
