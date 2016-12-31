@@ -5,6 +5,7 @@ import skimage
 import skimage.io
 import skimage.transform
 import numpy as np
+import sys
 
 
 from matplotlib.pyplot import imshow
@@ -110,7 +111,7 @@ def build_gen_graph():
     return graph, input_image
 
 
-def calc_content_loss(layer = "import/conv4_2/Relu:0"):
+def calc_content_loss(graph, layer = "import/conv4_2/Relu:0"):
     tensor_conv = graph.get_tensor_by_name(layer)
     content_loss = tf.reduce_sum(tf.square(tensor_conv[0] - tensor_conv[1]), name='content_loss')
     return content_loss
@@ -129,7 +130,7 @@ def tensorshape_to_int_array(ts):
     return s
 
 
-def calc_style_loss():
+def calc_style_loss_64(graph):
     tensor_conv1_1 = graph.get_tensor_by_name("import/conv1_1/Relu:0")
     tensor_conv2_1 = graph.get_tensor_by_name("import/conv2_1/Relu:0")
     tensor_conv3_1 = graph.get_tensor_by_name("import/conv3_1/Relu:0")
@@ -149,20 +150,34 @@ def calc_style_loss():
     tensor_style_gram5_1 = calc_gram(tensor_conv5_1[2])
 
     s = tensorshape_to_int_array(tensor_conv1_1.get_shape())
-    style_loss1_1 = (1 / (4 * (s[1] * s[2]) ** 2 * s[3] ** 2)) * tf.reduce_sum(
-        tf.pow(tensor_gen_gram1_1 - tensor_style_gram1_1, 2))
+    style_loss1_1_nominator = tf.reduce_sum(
+        tf.pow(tf.cast(tensor_gen_gram1_1, tf.float64) - tf.cast(tensor_style_gram1_1, tf.float64), 2))
+    style_loss1_1_denominator = tf.cast(4.0 * (s[1] * s[2]) ** 2 * s[3] ** 2.0, tf.float64)
+    style_loss1_1 = tf.div(style_loss1_1_nominator, style_loss1_1_denominator)
+
     s = tensorshape_to_int_array(tensor_conv2_1.get_shape())
-    style_loss2_1 = (1 / (4 * (s[1] * s[2]) ** 2 * s[3] ** 2)) * tf.reduce_sum(
-        tf.pow(tensor_gen_gram2_1 - tensor_style_gram2_1, 2))
+    style_loss2_1_nominator = tf.reduce_sum(
+        tf.pow(tf.cast(tensor_gen_gram2_1, tf.float64) - tf.cast(tensor_style_gram2_1, tf.float64), 2))
+    style_loss2_1_denominator = tf.cast(4.0 * (s[1] * s[2]) ** 2 * s[3] ** 2.0, tf.float64)
+    style_loss2_1 = tf.div(style_loss2_1_nominator, style_loss2_1_denominator)
+
     s = tensorshape_to_int_array(tensor_conv3_1.get_shape())
-    style_loss3_1 = (1 / (4 * (s[1] * s[2]) ** 2 * s[3] ** 2)) * tf.reduce_sum(
-        tf.pow(tensor_gen_gram3_1 - tensor_style_gram3_1, 2))
+    style_loss3_1_nominator = tf.reduce_sum(
+        tf.pow(tf.cast(tensor_gen_gram3_1, tf.float64) - tf.cast(tensor_style_gram3_1, tf.float64), 2))
+    style_loss3_1_denominator = tf.cast(4.0 * (s[1] * s[2]) ** 2 * s[3] ** 2.0, tf.float64)
+    style_loss3_1 = tf.div(style_loss3_1_nominator, style_loss3_1_denominator)
+
     s = tensorshape_to_int_array(tensor_conv4_1.get_shape())
-    style_loss4_1 = (1 / (4 * (s[1] * s[2]) ** 2 * s[3] ** 2)) * tf.reduce_sum(
-        tf.pow(tensor_gen_gram4_1 - tensor_style_gram4_1, 2))
+    style_loss4_1_nominator = tf.reduce_sum(
+        tf.pow(tf.cast(tensor_gen_gram4_1, tf.float64) - tf.cast(tensor_style_gram4_1, tf.float64), 2))
+    style_loss4_1_denominator = tf.cast(4.0 * (s[1] * s[2]) ** 2 * s[3] ** 2.0, tf.float64)
+    style_loss4_1 = tf.div(style_loss4_1_nominator, style_loss4_1_denominator)
+
     s = tensorshape_to_int_array(tensor_conv5_1.get_shape())
-    style_loss5_1 = (1 / (4 * (s[1] * s[2]) ** 2 * s[3] ** 2)) * tf.reduce_sum(
-        tf.pow(tensor_gen_gram5_1 - tensor_style_gram5_1, 2))
+    style_loss5_1_nominator = tf.reduce_sum(
+        tf.pow(tf.cast(tensor_gen_gram5_1, tf.float64) - tf.cast(tensor_style_gram5_1, tf.float64), 2))
+    style_loss5_1_denominator = tf.cast(4.0 * (s[1] * s[2]) ** 2 * s[3] ** 2.0, tf.float64)
+    style_loss5_1 = tf.div(style_loss5_1_nominator, style_loss5_1_denominator)
 
     style_loss = style_loss1_1 + style_loss2_1 + style_loss3_1 + style_loss4_1 + style_loss5_1
     return style_loss
@@ -185,14 +200,9 @@ assert batch.get_shape() == (3, 224, 224, 3)
 
 graph, images = load_vgg_input(batch)
 
-content_loss = calc_content_loss()
-style_loss = calc_style_loss()
-loss = style_loss + content_loss
-
-#feed = {input_image: cat.reshape(1, 224, 224, 3), style_image: style.reshape(1, 224, 224, 3)}
-# feed = {images: batch, input_image : cat.reshape(1, 224, 224, 3)}
-# prob = sess.run(loss, feed)
-
+content_loss = calc_content_loss(graph)
+style_loss = calc_style_loss_64(graph)
+loss = style_loss + tf.cast(content_loss, tf.float64)
 
 
 with tf.Session() as sess:
@@ -206,9 +216,8 @@ with tf.Session() as sess:
     # 1 content
     # 2 style
 
-    optimizer = tf.train.AdamOptimizer()
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.01)
     train_step = optimizer.minimize(loss)
-
 
     #sess.run(input_image.assign(cat.reshape(1, 224, 224, 3)))
     #sess.run(style_image.assign(style.reshape(1, 224, 224, 3) / 255.0))
@@ -217,11 +226,10 @@ with tf.Session() as sess:
     sess.run(init)
 
     for i in range(20):
-        sess.run(train_step)
-        if i % 5 == 0:
+        if i % 1 == 0:
             print(sess.run(loss))
-            print(sess.run(variables[0]))
+            #print(sess.run(variables[0]))
             #save_image('C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer\\output_images\\im' + str(i) + '.jpg', sess.run(gen_image))
             #print(sess.run(gen_graph['conv1_1'], feed_dict=feed))
-
+        sess.run(train_step)
 
