@@ -177,5 +177,4 @@ Temporary Items
 #Local Data
 *.tfmodel
 StyleTransfer/logs/
-StyleTransfer/output_images/
 StyleTransfer/tmp
