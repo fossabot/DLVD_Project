@@ -129,11 +129,11 @@ def build_gen_graph():
     input_image = tf.placeholder('float32', [1, 224,224,3], name="input_image")
     #graph['input_image_var'] = tf.Variable()
     graph['conv1_1'] = _conv2d_relu(input_image)
-    #graph['conv2_1'] = _conv2d_relu(graph['conv1_1'])
-    #graph['conv3_1'] = _conv2d_relu(graph['conv2_1'])
-    #graph['conv4_1'] = _conv2d_relu(graph['conv3_1'])
-    #graph['conv5_1'] = _conv2d_relu(graph['conv4_1'])
-    graph['output'] = _conv2d_relu(graph['conv1_1'])
+    graph['conv2_1'] = _conv2d_relu(graph['conv1_1'])
+    graph['conv3_1'] = _conv2d_relu(graph['conv2_1'])
+    graph['conv4_1'] = _conv2d_relu(graph['conv3_1'])
+    graph['conv5_1'] = _conv2d_relu(graph['conv4_1'])
+    graph['output'] = _conv2d_relu(graph['conv5_1'])
     return graph, input_image
 
 
