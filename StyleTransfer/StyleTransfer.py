@@ -182,15 +182,26 @@ def build_part_layer(graph, prefix_name, part, deep, index=0):
     if deep > 1:
         p1, p2, p3, p4 = _slice_tensor(part)
 
-        graph[prefix_name + '_L' + str(index) + '_LP1_P1'] = tf.sigmoid(_conv2d_relu(p1))
-        graph[prefix_name + '_L' + str(index) + '_LP1_P2'] = tf.sigmoid(_conv2d_relu(p2))
-        graph[prefix_name + '_L' + str(index) + '_LP1_P3'] = tf.sigmoid(_conv2d_relu(p3))
-        graph[prefix_name + '_L' + str(index) + '_LP1_P4'] = tf.sigmoid(_conv2d_relu(p4))
+        graph[prefix_name + '_L' + str(index) + '_LP1_P1_1'] = tf.sigmoid(_conv2d_relu(p1))
+        graph[prefix_name + '_L' + str(index) + '_LP1_P1_2'] = tf.sigmoid(_conv2d_relu(graph[prefix_name + '_L' + str(index) + '_LP1_P1_1']))
+        graph[prefix_name + '_L' + str(index) + '_LP1_P1_3'] = tf.sigmoid(_conv2d_relu(graph[prefix_name + '_L' + str(index) + '_LP1_P1_2']))
 
-        p1 = build_part_layer(graph, prefix_name, graph[prefix_name + '_L' + str(index) + '_LP1_P1'], deep - 1, index + 1)
-        p2 = build_part_layer(graph, prefix_name, graph[prefix_name + '_L' + str(index) + '_LP1_P2'], deep - 1, index + 1)
-        p3 = build_part_layer(graph, prefix_name, graph[prefix_name + '_L' + str(index) + '_LP1_P3'], deep - 1, index + 1)
-        p4 = build_part_layer(graph, prefix_name, graph[prefix_name + '_L' + str(index) + '_LP1_P4'], deep - 1, index + 1)
+        graph[prefix_name + '_L' + str(index) + '_LP1_P2_1'] = tf.sigmoid(_conv2d_relu(p2))
+        graph[prefix_name + '_L' + str(index) + '_LP1_P2_2'] = tf.sigmoid(_conv2d_relu(graph[prefix_name + '_L' + str(index) + '_LP1_P2_1']))
+        graph[prefix_name + '_L' + str(index) + '_LP1_P2_3'] = tf.sigmoid(_conv2d_relu(graph[prefix_name + '_L' + str(index) + '_LP1_P2_2']))
+
+        graph[prefix_name + '_L' + str(index) + '_LP1_P3_1'] = tf.sigmoid(_conv2d_relu(p3))
+        graph[prefix_name + '_L' + str(index) + '_LP1_P3_2'] = tf.sigmoid(_conv2d_relu(graph[prefix_name + '_L' + str(index) + '_LP1_P3_1']))
+        graph[prefix_name + '_L' + str(index) + '_LP1_P3_3'] = tf.sigmoid(_conv2d_relu(graph[prefix_name + '_L' + str(index) + '_LP1_P3_2']))
+
+        graph[prefix_name + '_L' + str(index) + '_LP1_P4_1'] = tf.sigmoid(_conv2d_relu(p4))
+        graph[prefix_name + '_L' + str(index) + '_LP1_P4_2'] = tf.sigmoid(_conv2d_relu(graph[prefix_name + '_L' + str(index) + '_LP1_P4_1']))
+        graph[prefix_name + '_L' + str(index) + '_LP1_P4_3'] = tf.sigmoid(_conv2d_relu(graph[prefix_name + '_L' + str(index) + '_LP1_P4_2']))
+
+        p1 = build_part_layer(graph, prefix_name, graph[prefix_name + '_L' + str(index) + '_LP1_P1_3'], deep - 1, index + 1)
+        p2 = build_part_layer(graph, prefix_name, graph[prefix_name + '_L' + str(index) + '_LP1_P2_3'], deep - 1, index + 1)
+        p3 = build_part_layer(graph, prefix_name, graph[prefix_name + '_L' + str(index) + '_LP1_P3_3'], deep - 1, index + 1)
+        p4 = build_part_layer(graph, prefix_name, graph[prefix_name + '_L' + str(index) + '_LP1_P4_3'], deep - 1, index + 1)
 
         graph[prefix_name + '_L' + str(index) + '_LP2_P1'] = _concat_parts(p1, p2, p3, p4)
 
@@ -354,7 +365,7 @@ def main():
 
         #load_gen_weithts(sess, path="\\checkStyleContent_4_plus_2")
 
-        for i in range(4000):
+        for i in range(2000):
             if i % 200 == 0:
                 print(sess.run(loss, feed_dict=feed))
                 #print(sess.run(input_image, feed_dict=feed))
@@ -362,13 +373,13 @@ def main():
                 #print(sess.run(variables_gen_filter[0]))
                 print(sess.run(variables_gen_bias, feed_dict=feed))
                 #print(sess.run(variables[0]))
-                save_image('\\output_images\\style_4_plus_5', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True)
+                save_image('\\output_images\\style_2_plus_6', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True)
                 #print(sess.run(gen_graph['conv1_1'], feed_dict=feed))
             sess.run(train_step, feed_dict=feed)
 
         #save_image('C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer\\output_images\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True)
         print(sess.run(loss, feed_dict=feed))
-        save_gen_weights(sess, path="\\checkStyleContent_4_plus_5")
+        save_gen_weights(sess, path="\\checkStyleContent_2_plus_6")
 
 
 
