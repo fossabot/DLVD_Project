@@ -1,3 +1,4 @@
+import errno
 import scipy.io
 import scipy.misc
 import tensorflow as tf
@@ -5,8 +6,7 @@ import skimage
 import skimage.io
 import skimage.transform
 import numpy as np
-import sys
-
+import os
 
 from matplotlib.pyplot import imshow
 
@@ -35,7 +35,7 @@ def load_image(path, between_01=False):
     else :
         return resized_img
 
-def save_image(path, image, to255=False):
+def save_image(path, name, image, to255=False):
     # Output should add back the mean.
     #image = image + MEAN_VALUES
     # Get rid of the first useless dimension, what remains is the image.
@@ -43,7 +43,8 @@ def save_image(path, image, to255=False):
     if to255 == True :
         image = image * 255.0
     image = np.clip(image, 0, 255).astype('uint8')
-    scipy.misc.imsave(path, image)
+    make_sure_path_exists(project_path + path)
+    scipy.misc.imsave(project_path + path + name, image)
 
 cat = load_image(project_path + "\\images\\cat.jpg")
 elch = load_image(project_path + "\\images\\elch.jpg")
@@ -84,10 +85,19 @@ def load_vgg_input( images, path = project_path + "\\model\\vgg.tfmodel"):
     return tf.get_default_graph(), images
 
 
-def save_gen_weights(sess, pathAndName="\\checkpoint.data"):
+def make_sure_path_exists(path):
+    try:
+        os.makedirs(path)
+    except OSError as exception:
+        if exception.errno != errno.EEXIST:
+            raise
+
+
+def save_gen_weights(sess, path="", name="\\checkpoint.data"):
     print('save generator weights')
     saver = tf.train.Saver(tf.all_variables())
-    saver.save(sess, project_path + "\\tmp" + pathAndName)
+    make_sure_path_exists(project_path + "\\tmp" + path)
+    saver.save(sess, project_path + "\\tmp" + path + name)
     print('Done')
 
 
@@ -99,6 +109,23 @@ def load_gen_weithts(sess, path=""):
     print(c_path)
     saver.restore(sess, tf.train.latest_checkpoint(c_path))  # now OK
     print("DONE")
+
+
+def _slice_tensor(tensor):
+    shape = tensorshape_to_int_array(tensor.get_shape());
+    half1 = int(shape[1]/2)
+    half2 = int(shape[2]/2)
+
+    p1 = tf.slice(tensor, [0, 0, 0, 0], [1, half1, half2, shape[3]])
+    p2 = tf.slice(tensor, [0, half1, 0, 0], [1, half1, half2, shape[3]])
+    p3 = tf.slice(tensor, [0, 0, half2, 0], [1, half1, half2, shape[3]])
+    p4 = tf.slice(tensor, [0, half1, half2, 0], [1, half1, half2, shape[3]])
+    return p1, p2, p3, p4
+
+def _concat_parts(p1, p2, p3, p4):
+    c_tensor = tf.concat(1, [p1, p2])
+    c_tensor2 = tf.concat(1, [p3, p4])
+    return tf.concat(2, [c_tensor, c_tensor2])
 
 
 def _relu(conv2d_layer):
@@ -128,12 +155,23 @@ def build_gen_graph():
     #graph['gen_input'] = tf.Variable(input_image, trainable=False)
     input_image = tf.placeholder('float32', [1, 224,224,3], name="input_image")
     #graph['input_image_var'] = tf.Variable()
-    graph['conv1_1'] = _conv2d_relu(input_image)
-    #graph['conv2_1'] = _conv2d_relu(graph['conv1_1'])
-    #graph['conv3_1'] = _conv2d_relu(graph['conv2_1'])
-    #graph['conv4_1'] = _conv2d_relu(graph['conv3_1'])
-    #graph['conv5_1'] = _conv2d_relu(graph['conv4_1'])
-    graph['output'] = _conv2d_relu(graph['conv1_1'])
+    graph['conv1_1'] = tf.sigmoid(_conv2d_relu(input_image))
+    graph['conv1_2'] = tf.sigmoid(_conv2d_relu(graph['conv1_1']))
+
+    p1, p2, p3, p4 = _slice_tensor(graph['conv1_2'])
+    graph['conv2_1_p1'] = tf.sigmoid(_conv2d_relu(p1))
+    graph['conv2_1_p2'] = tf.sigmoid(_conv2d_relu(p2))
+    graph['conv2_1_p3'] = tf.sigmoid(_conv2d_relu(p3))
+    graph['conv2_1_p4'] = tf.sigmoid(_conv2d_relu(p4))
+
+    graph['conv2_2_p1'] = tf.sigmoid(_conv2d_relu(graph['conv2_1_p1']))
+    graph['conv2_2_p2'] = tf.sigmoid(_conv2d_relu(graph['conv2_1_p2']))
+    graph['conv2_2_p3'] = tf.sigmoid(_conv2d_relu(graph['conv2_1_p3']))
+    graph['conv2_2_p4'] = tf.sigmoid(_conv2d_relu(graph['conv2_1_p4']))
+
+    c_tensor = _concat_parts(p1, p2, p3, p4)
+    graph['conv3_1'] = tf.sigmoid(_conv2d_relu(c_tensor))
+    graph['output'] = tf.sigmoid(_conv2d_relu(graph['conv3_1']))
     return graph, input_image
 
 
@@ -230,7 +268,7 @@ assert batch.get_shape() == (3, 224, 224, 3)
 
 graph, images = load_vgg_input(batch)
 
-content_loss = 0.4 * calc_content_loss(graph)
+content_loss = 0.001 * calc_content_loss(graph)
 style_loss = calc_style_loss_64(graph)
 loss = tf.cast(content_loss, tf.float64) + style_loss
 
@@ -250,7 +288,7 @@ with tf.Session() as sess:
     # 2 style
 
     optimizer = tf.train.AdamOptimizer()
-    #optimizer = tf.train.GradientDescentOptimizer(learning_rate=5.0)
+    #optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.5)
     variables = variables_gen_filter + variables_gen_bias
     train_step = optimizer.minimize(loss, var_list=variables)
 
@@ -259,7 +297,7 @@ with tf.Session() as sess:
     init = tf.global_variables_initializer()
     sess.run(init)
 
-    #load_gen_weithts(sess, path="\\checkStyleContent_20_plus")
+    #load_gen_weithts(sess, path="\\checkStyleContent_4_plus_2")
 
     for i in range(4000):
         if i % 200 == 0:
@@ -269,10 +307,10 @@ with tf.Session() as sess:
             #print(sess.run(variables_gen_filter[0]))
             print(sess.run(variables_gen_bias, feed_dict=feed))
             #print(sess.run(variables[0]))
-            save_image('C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer\\output_images\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True)
+            save_image('\\output_images\\style_4_plus_3', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True)
             #print(sess.run(gen_graph['conv1_1'], feed_dict=feed))
         sess.run(train_step, feed_dict=feed)
 
     #save_image('C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer\\output_images\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True)
     print(sess.run(loss, feed_dict=feed))
-    save_gen_weights(sess, pathAndName="\\checkStyleContent_24_plus\\checkpoint.data")
+    save_gen_weights(sess, path="\\checkStyleContent_4_plus_3")
