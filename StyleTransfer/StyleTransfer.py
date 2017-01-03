@@ -115,17 +115,67 @@ def _slice_tensor(tensor):
     shape = tensorshape_to_int_array(tensor.get_shape());
     half1 = int(shape[1]/2)
     half2 = int(shape[2]/2)
+    halfhalf1 = int(half1 / 2)
+    halfhalf2 = int(half2 / 2)
 
-    p1 = tf.slice(tensor, [0, 0, 0, 0], [1, half1, half2, shape[3]])
-    p2 = tf.slice(tensor, [0, half1, 0, 0], [1, half1, half2, shape[3]])
-    p3 = tf.slice(tensor, [0, 0, half2, 0], [1, half1, half2, shape[3]])
-    p4 = tf.slice(tensor, [0, half1, half2, 0], [1, half1, half2, shape[3]])
+    p1 = tf.slice(tensor, [0, 0, 0, 0], [1, half1 + halfhalf1, half2 + halfhalf2, shape[3]])
+    p2 = tf.slice(tensor, [0, halfhalf1, 0, 0], [1, half1 + halfhalf1, half2 + halfhalf2, shape[3]])
+    p3 = tf.slice(tensor, [0, 0, halfhalf2, 0], [1, half1 + halfhalf1, half2 + halfhalf2, shape[3]])
+    p4 = tf.slice(tensor, [0, halfhalf1, halfhalf2, 0], [1, half1 + halfhalf1, half2 + halfhalf2, shape[3]])
     return p1, p2, p3, p4
 
 def _concat_parts(p1, p2, p3, p4):
-    c_tensor = tf.concat(1, [p1, p2])
-    c_tensor2 = tf.concat(1, [p3, p4])
-    return tf.concat(2, [c_tensor, c_tensor2])
+    shape = tensorshape_to_int_array(p1.get_shape())
+    shape = (shape[0], int(4*shape[1]/3), int(4*shape[2]/3), shape[3])
+
+    #assert(shape[1] == 224)
+    #assert (shape[2] == 224)
+
+    half1 = int(shape[1] / 2)
+    half2 = int(shape[2] / 2)
+    halfhalf1 = int(half1 / 2)
+    halfhalf2 = int(half2 / 2)
+
+
+    horizontal_add = tf.constant(np.zeros([1, halfhalf1, half2 + halfhalf2, shape[3]]), "float32")
+    vertical_add = tf.constant(np.zeros([1, 2*half1, halfhalf2, shape[3]]), "float32")
+
+    var = tf.constant(np.zeros(shape), dtype="float32")
+    var2 = tf.add(var, tf.concat(2, [tf.concat(1, [p1, horizontal_add]), vertical_add]))
+    var3 = tf.add(var2, tf.concat(2, [tf.concat(1, [horizontal_add, p2]), vertical_add]))
+    var4 = tf.add(var3, tf.concat(2, [vertical_add, tf.concat(1, [p3, horizontal_add])]))
+    var5 = tf.add(var4, tf.concat(2, [vertical_add, tf.concat(1, [horizontal_add, p4])]))
+
+    a_div = np.zeros(shape, dtype="float32")
+    a_div.fill(1.0)
+    for i in range(half1):
+        for j in range(halfhalf2):
+            for k in range(shape[3]):
+                a_div[0, halfhalf1 + i, j, k] = 2
+
+    for i in range(half1):
+        for j in range(halfhalf2):
+            for k in range(shape[3]):
+                a_div[0, halfhalf1 + i, shape[2] - 1 - j, k] = 2
+
+    for i in range(halfhalf1):
+        for j in range(half2):
+            for k in range(shape[3]):
+                a_div[0, i, halfhalf2 + j, k] = 2
+
+    for i in range(halfhalf1):
+        for j in range(half2):
+            for k in range(shape[3]):
+                a_div[0, shape[1] - 1 - i, halfhalf2 + j, k] = 2
+
+    for i in range(half1):
+        for j in range(half2):
+            for k in range(shape[3]):
+                a_div[0, halfhalf1 + i, halfhalf2 + j, k] = 4
+
+    var_div = tf.constant(a_div)
+    var6 = tf.div(var5, var_div)
+    return var6
 
 def build_part_layer(graph, prefix_name, part, deep, index=0):
 
@@ -312,25 +362,28 @@ def main():
                 #print(sess.run(variables_gen_filter[0]))
                 print(sess.run(variables_gen_bias, feed_dict=feed))
                 #print(sess.run(variables[0]))
-                save_image('\\output_images\\style_1_plus_4', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True)
+                save_image('\\output_images\\style_4_plus_5', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True)
                 #print(sess.run(gen_graph['conv1_1'], feed_dict=feed))
             sess.run(train_step, feed_dict=feed)
 
         #save_image('C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer\\output_images\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True)
         print(sess.run(loss, feed_dict=feed))
-        save_gen_weights(sess, path="\\checkStyleContent_1_plus_4")
+        save_gen_weights(sess, path="\\checkStyleContent_4_plus_5")
 
 
 
 def test():
     with tf.Session() as sess:
-        c = tf.constant([[[ [1,1],[2,2],[5,5],[6,6] ], [ [3,3],[4,4],[7,7],[8,8] ], [ [9,9],[10,10],[13,13],[14,14] ], [ [11,11],[12,12],[15,15],[16,16] ]]])
+        init = tf.global_variables_initializer()
+
+        val = np.zeros([1,4,4,1])
+        val.fill(1.0)
+        c = tf.constant(val, dtype="float64")
         print(sess.run(c))
         p1, p2, p3, p4 = _slice_tensor(c)
-        print(sess.run(p1))
-        print(sess.run(p2))
-        print(sess.run(p3))
-        print(sess.run(p4))
-        print(sess.run(_concat_parts(p1, p2, p3, p4)))
+
+        x = _concat_parts(p1, p2, p3, p4)
+        sess.run(init)
+        print(sess.run(x))
 
 main()
