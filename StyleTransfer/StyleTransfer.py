@@ -35,7 +35,7 @@ def load_image(path, between_01=False):
     else :
         return resized_img
 
-def save_image(path, image, to255=False):
+def save_image(path, name, image, to255=False):
     # Output should add back the mean.
     #image = image + MEAN_VALUES
     # Get rid of the first useless dimension, what remains is the image.
@@ -43,7 +43,9 @@ def save_image(path, image, to255=False):
     if to255 == True :
         image = image * 255.0
     image = np.clip(image, 0, 255).astype('uint8')
-    scipy.misc.imsave(path, image)
+    make_sure_path_exists(project_path + path)
+    scipy.misc.imsave(project_path + path + name, image)
+
 
 cat = load_image(project_path + "\\images\\cat.jpg")
 elch = load_image(project_path + "\\images\\elch.jpg")
