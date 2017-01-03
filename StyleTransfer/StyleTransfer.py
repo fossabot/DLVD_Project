@@ -1,3 +1,4 @@
+import errno
 import scipy.io
 import scipy.misc
 import tensorflow as tf
@@ -5,7 +6,7 @@ import skimage
 import skimage.io
 import skimage.transform
 import numpy as np
-import sys
+import os
 
 
 from matplotlib.pyplot import imshow
@@ -85,11 +86,18 @@ def load_vgg_input( images, path = project_path + "\\model\\vgg.tfmodel"):
     print('Done')
     return tf.get_default_graph(), images
 
+def make_sure_path_exists(path):
+    try:
+        os.makedirs(path)
+    except OSError as exception:
+        if exception.errno != errno.EEXIST:
+            raise
 
-def save_gen_weights(sess, pathAndName="\\checkpoint.data"):
+def save_gen_weights(sess, path="", name="\\checkpoint.data"):
     print('save generator weights')
     saver = tf.train.Saver(tf.all_variables())
-    saver.save(sess, project_path + "\\tmp" + pathAndName)
+    make_sure_path_exists(project_path + "\\tmp" + path)
+    saver.save(sess, project_path + "\\tmp" + path + name)
     print('Done')
 
 
@@ -130,16 +138,16 @@ def build_gen_graph():
     #graph['gen_input'] = tf.Variable(input_image, trainable=False)
     input_image = tf.placeholder('float32', [1, 224,224,3], name="input_image")
     #graph['input_image_var'] = tf.Variable()
-    graph['conv1_1'] = _conv2d_relu(input_image)
-    graph['conv2_1'] = _conv2d_relu(graph['conv1_1'])
-    graph['conv3_1'] = _conv2d_relu(graph['conv2_1'])
-    graph['conv4_1'] = _conv2d_relu(graph['conv3_1'])
-    graph['conv5_1'] = _conv2d_relu(graph['conv4_1'])
-    graph['conv6_1'] = _conv2d_relu(graph['conv5_1'])
-    graph['conv7_1'] = _conv2d_relu(graph['conv6_1'])
-    graph['conv8_1'] = _conv2d_relu(graph['conv7_1'])
-    graph['conv9_1'] = _conv2d_relu(graph['conv8_1'])
-    graph['output'] = _conv2d_relu(graph['conv9_1'])
+    graph['conv1_1'] = tf.sigmoid(_conv2d_relu(input_image))
+    graph['conv2_1'] = tf.sigmoid(_conv2d_relu(graph['conv1_1']))
+    graph['conv3_1'] = tf.sigmoid(_conv2d_relu(graph['conv2_1']))
+    graph['conv4_1'] = tf.sigmoid(_conv2d_relu(graph['conv3_1']))
+    graph['conv5_1'] = tf.sigmoid(_conv2d_relu(graph['conv4_1']))
+    #graph['conv6_1'] = tf.sigmoid(_conv2d_relu(graph['conv5_1']))
+    #graph['conv7_1'] = tf.sigmoid(_conv2d_relu(graph['conv6_1']))
+    #graph['conv8_1'] = tf.sigmoid(_conv2d_relu(graph['conv7_1']))
+    #graph['conv9_1'] = tf.sigmoid(_conv2d_relu(graph['conv8_1']))
+    graph['output'] = tf.sigmoid(_conv2d_relu(graph['conv5_1']))
     return graph, input_image
 
 
@@ -236,7 +244,7 @@ assert batch.get_shape() == (3, 224, 224, 3)
 
 graph, images = load_vgg_input(batch)
 
-content_loss = 0.4 * calc_content_loss(graph)
+content_loss = 0.001 * calc_content_loss(graph)
 style_loss = calc_style_loss_64(graph)
 loss = tf.cast(content_loss, tf.float64) + style_loss
 
@@ -280,5 +288,7 @@ with tf.Session() as sess:
             sess.run(train_step, feed_dict=feed)
 
             # save_image('C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer\\output_images\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True)
-        print(sess.run(loss, feed_dict=feed))
-        save_gen_weights(sess, path="\\checkStyleContent_4_plus_7")
+
+    print(sess.run(loss, feed_dict=feed))
+    save_image('\\output_images\\style_4_plus_7', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True)
+    save_gen_weights(sess, path="\\checkStyleContent_4_plus_7")
