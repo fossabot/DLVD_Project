@@ -133,7 +133,11 @@ def build_gen_graph():
     graph['conv3_1'] = _conv2d_relu(graph['conv2_1'])
     graph['conv4_1'] = _conv2d_relu(graph['conv3_1'])
     graph['conv5_1'] = _conv2d_relu(graph['conv4_1'])
-    graph['output'] = _conv2d_relu(graph['conv5_1'])
+    graph['conv6_1'] = _conv2d_relu(graph['conv5_1'])
+    graph['conv7_1'] = _conv2d_relu(graph['conv6_1'])
+    graph['conv8_1'] = _conv2d_relu(graph['conv7_1'])
+    graph['conv9_1'] = _conv2d_relu(graph['conv8_1'])
+    graph['output'] = _conv2d_relu(graph['conv9_1'])
     return graph, input_image
 
 
@@ -269,10 +273,10 @@ with tf.Session() as sess:
             #print(sess.run(variables_gen_filter[0]))
             print(sess.run(variables_gen_bias, feed_dict=feed))
             #print(sess.run(variables[0]))
-            save_image('C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer\\output_images\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True)
-            #print(sess.run(gen_graph['conv1_1'], feed_dict=feed))
-        sess.run(train_step, feed_dict=feed)
+            save_image('\\output_images\\style_4_plus_7', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed),to255=True)
+            # print(sess.run(gen_graph['conv1_1'], feed_dict=feed))
+            sess.run(train_step, feed_dict=feed)
 
-    #save_image('C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer\\output_images\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True)
-    print(sess.run(loss, feed_dict=feed))
-    save_gen_weights(sess, pathAndName="\\checkStyleContent_24_plus\\checkpoint.data")
+            # save_image('C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer\\output_images\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True)
+        print(sess.run(loss, feed_dict=feed))
+        save_gen_weights(sess, path="\\checkStyleContent_4_plus_7")
