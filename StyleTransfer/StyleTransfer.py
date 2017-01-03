@@ -127,6 +127,27 @@ def _concat_parts(p1, p2, p3, p4):
     c_tensor2 = tf.concat(1, [p3, p4])
     return tf.concat(2, [c_tensor, c_tensor2])
 
+def build_part_layer(graph, prefix_name, part, deep, index=0):
+
+    if deep > 1:
+        p1, p2, p3, p4 = _slice_tensor(part)
+
+        graph[prefix_name + '_L' + str(index) + '_LP1_P1'] = tf.sigmoid(_conv2d_relu(p1))
+        graph[prefix_name + '_L' + str(index) + '_LP1_P2'] = tf.sigmoid(_conv2d_relu(p2))
+        graph[prefix_name + '_L' + str(index) + '_LP1_P3'] = tf.sigmoid(_conv2d_relu(p3))
+        graph[prefix_name + '_L' + str(index) + '_LP1_P4'] = tf.sigmoid(_conv2d_relu(p4))
+
+        p1 = build_part_layer(graph, prefix_name, graph[prefix_name + '_L' + str(index) + '_LP1_P1'], deep - 1, index + 1)
+        p2 = build_part_layer(graph, prefix_name, graph[prefix_name + '_L' + str(index) + '_LP1_P2'], deep - 1, index + 1)
+        p3 = build_part_layer(graph, prefix_name, graph[prefix_name + '_L' + str(index) + '_LP1_P3'], deep - 1, index + 1)
+        p4 = build_part_layer(graph, prefix_name, graph[prefix_name + '_L' + str(index) + '_LP1_P4'], deep - 1, index + 1)
+
+        graph[prefix_name + '_L' + str(index) + '_LP2_P1'] = _concat_parts(p1, p2, p3, p4)
+
+        return graph[prefix_name + '_L' + str(index) + '_LP2_P1']
+
+    else:
+        return part
 
 def _relu(conv2d_layer):
     return tf.nn.relu(conv2d_layer)
@@ -150,28 +171,10 @@ def _conv2d_relu(prev_layer):
 
 def build_gen_graph():
     graph = {}
-    #input_image = tf.constant(cat.reshape(1,224,224,3), dtype="float32")
-    #input_image = tf.Variable(cat.reshape(1,224,224,3), trainable=False, dtype="float32", name="input_image")
-    #graph['gen_input'] = tf.Variable(input_image, trainable=False)
     input_image = tf.placeholder('float32', [1, 224,224,3], name="input_image")
-    #graph['input_image_var'] = tf.Variable()
-    graph['conv1_1'] = tf.sigmoid(_conv2d_relu(input_image))
-    graph['conv1_2'] = tf.sigmoid(_conv2d_relu(graph['conv1_1']))
-
-    p1, p2, p3, p4 = _slice_tensor(graph['conv1_2'])
-    graph['conv2_1_p1'] = tf.sigmoid(_conv2d_relu(p1))
-    graph['conv2_1_p2'] = tf.sigmoid(_conv2d_relu(p2))
-    graph['conv2_1_p3'] = tf.sigmoid(_conv2d_relu(p3))
-    graph['conv2_1_p4'] = tf.sigmoid(_conv2d_relu(p4))
-
-    graph['conv2_2_p1'] = tf.sigmoid(_conv2d_relu(graph['conv2_1_p1']))
-    graph['conv2_2_p2'] = tf.sigmoid(_conv2d_relu(graph['conv2_1_p2']))
-    graph['conv2_2_p3'] = tf.sigmoid(_conv2d_relu(graph['conv2_1_p3']))
-    graph['conv2_2_p4'] = tf.sigmoid(_conv2d_relu(graph['conv2_1_p4']))
-
-    c_tensor = _concat_parts(p1, p2, p3, p4)
-    graph['conv3_1'] = tf.sigmoid(_conv2d_relu(c_tensor))
-    graph['output'] = tf.sigmoid(_conv2d_relu(graph['conv3_1']))
+    graph['Generator_L0_LP1_P1'] = tf.sigmoid(_conv2d_relu(input_image))
+    #graph[prefix_name + '_L' + str(index) + '_LP1_P2'] = tf.sigmoid(_conv2d_relu(graph[prefix_name + '_L' + str(index) + '_LP1_P1']))
+    graph['output'] = build_part_layer(graph, 'Generator', graph['Generator_L0_LP1_P1'], 3)
     return graph, input_image
 
 
@@ -254,63 +257,80 @@ def calc_style_loss_64(graph):
 # 1 content
 # 2 style
 
-gen_graph, input_image = build_gen_graph()
-gen_image = gen_graph['output']
+def main():
 
-style_image = tf.placeholder('float32', [1,224,224,3], name="style_image")
-#style_image = tf.Variable(style.reshape(1,224,224,3), trainable=False, dtype="float32", name="style_image")
+    gen_graph, input_image = build_gen_graph()
+    gen_image = gen_graph['output']
 
-#batch = tf.nn.sigmoid(gen_image)
-batch = gen_image
-batch = tf.concat(0, [batch, input_image])
-batch = tf.concat(0, [batch, style_image])
-assert batch.get_shape() == (3, 224, 224, 3)
+    style_image = tf.placeholder('float32', [1,224,224,3], name="style_image")
+    #style_image = tf.Variable(style.reshape(1,224,224,3), trainable=False, dtype="float32", name="style_image")
 
-graph, images = load_vgg_input(batch)
+    #batch = tf.nn.sigmoid(gen_image)
+    batch = gen_image
+    batch = tf.concat(0, [batch, input_image])
+    batch = tf.concat(0, [batch, style_image])
+    assert batch.get_shape() == (3, 224, 224, 3)
 
-content_loss = 0.001 * calc_content_loss(graph)
-style_loss = calc_style_loss_64(graph)
-loss = tf.cast(content_loss, tf.float64) + style_loss
+    graph, images = load_vgg_input(batch)
 
-feed = {}
-feed[input_image] = cat.reshape(1,224,224,3) / 255.0
-feed[style_image] = style.reshape(1,224,224,3) / 255.0
+    content_loss = 0.001 * calc_content_loss(graph)
+    style_loss = calc_style_loss_64(graph)
+    loss = tf.cast(content_loss, tf.float64) + style_loss
 
-with tf.Session() as sess:
+    feed = {}
+    feed[input_image] = cat.reshape(1,224,224,3) / 255.0
+    feed[style_image] = style.reshape(1,224,224,3) / 255.0
 
-    # set log directory
-    summary_writer = tf.train.SummaryWriter(
-        project_path + '\\logs',
-        graph_def=sess.graph_def)
+    with tf.Session() as sess:
 
-    # 0 generiert
-    # 1 content
-    # 2 style
+        # set log directory
+        summary_writer = tf.train.SummaryWriter(
+            project_path + '\\logs',
+            graph_def=sess.graph_def)
 
-    optimizer = tf.train.AdamOptimizer()
-    #optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.5)
-    variables = variables_gen_filter + variables_gen_bias
-    train_step = optimizer.minimize(loss, var_list=variables)
+        # 0 generiert
+        # 1 content
+        # 2 style
 
-    print(len(tf.trainable_variables()));
+        optimizer = tf.train.AdamOptimizer()
+        #optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.5)
+        variables = variables_gen_filter + variables_gen_bias
+        train_step = optimizer.minimize(loss, var_list=variables)
 
-    init = tf.global_variables_initializer()
-    sess.run(init)
+        print(len(tf.trainable_variables()));
 
-    #load_gen_weithts(sess, path="\\checkStyleContent_4_plus_2")
+        init = tf.global_variables_initializer()
+        sess.run(init)
 
-    for i in range(4000):
-        if i % 200 == 0:
-            print(sess.run(loss, feed_dict=feed))
-            #print(sess.run(input_image, feed_dict=feed))
-            #print(sess.run(gen_image, feed_dict=feed))
-            #print(sess.run(variables_gen_filter[0]))
-            print(sess.run(variables_gen_bias, feed_dict=feed))
-            #print(sess.run(variables[0]))
-            save_image('\\output_images\\style_4_plus_3', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True)
-            #print(sess.run(gen_graph['conv1_1'], feed_dict=feed))
-        sess.run(train_step, feed_dict=feed)
+        #load_gen_weithts(sess, path="\\checkStyleContent_4_plus_2")
 
-    #save_image('C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer\\output_images\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True)
-    print(sess.run(loss, feed_dict=feed))
-    save_gen_weights(sess, path="\\checkStyleContent_4_plus_3")
+        for i in range(4000):
+            if i % 200 == 0:
+                print(sess.run(loss, feed_dict=feed))
+                #print(sess.run(input_image, feed_dict=feed))
+                #print(sess.run(gen_image, feed_dict=feed))
+                #print(sess.run(variables_gen_filter[0]))
+                print(sess.run(variables_gen_bias, feed_dict=feed))
+                #print(sess.run(variables[0]))
+                save_image('\\output_images\\style_1_plus_4', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True)
+                #print(sess.run(gen_graph['conv1_1'], feed_dict=feed))
+            sess.run(train_step, feed_dict=feed)
+
+        #save_image('C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer\\output_images\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True)
+        print(sess.run(loss, feed_dict=feed))
+        save_gen_weights(sess, path="\\checkStyleContent_1_plus_4")
+
+
+
+def test():
+    with tf.Session() as sess:
+        c = tf.constant([[[ [1,1],[2,2],[5,5],[6,6] ], [ [3,3],[4,4],[7,7],[8,8] ], [ [9,9],[10,10],[13,13],[14,14] ], [ [11,11],[12,12],[15,15],[16,16] ]]])
+        print(sess.run(c))
+        p1, p2, p3, p4 = _slice_tensor(c)
+        print(sess.run(p1))
+        print(sess.run(p2))
+        print(sess.run(p3))
+        print(sess.run(p4))
+        print(sess.run(_concat_parts(p1, p2, p3, p4)))
+
+main()
