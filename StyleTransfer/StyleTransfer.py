@@ -239,6 +239,22 @@ def build_gen_graph():
     return graph, input_image
 
 
+def build_gen_graph_deep():
+    graph = {}
+    input_image = tf.placeholder('float32', [1, 224, 224, 3], name="input_image")
+
+    graph['conv1_1'] = tf.sigmoid(_conv2d_relu(input_image))
+    graph['conv2_1'] = tf.sigmoid(_conv2d_relu(graph['conv1_1']))
+    graph['conv3_1'] = tf.sigmoid(_conv2d_relu(graph['conv2_1']))
+    graph['conv4_1'] = tf.sigmoid(_conv2d_relu(graph['conv3_1']))
+    #graph['conv5_1'] = tf.sigmoid(_conv2d_relu(graph['conv4_1']))
+    #graph['conv6_1'] = tf.sigmoid(_conv2d_relu(graph['conv5_1']))
+    #graph['conv7_1'] = tf.sigmoid(_conv2d_relu(graph['conv6_1']))
+    #graph['conv8_1'] = tf.sigmoid(_conv2d_relu(graph['conv7_1']))
+    #graph['conv9_1'] = tf.sigmoid(_conv2d_relu(graph['conv8_1']))
+    graph['output'] = tf.sigmoid(_conv2d_relu(graph['conv4_1']))
+    return graph, input_image
+
 def calc_content_loss(graph, layer = "import/conv4_1/Relu:0"):
     tensor_conv = graph.get_tensor_by_name(layer)
     content_l= tf.reduce_sum(tf.square(tensor_conv[0] - tensor_conv[1]), name='content_loss')
@@ -320,7 +336,7 @@ def calc_style_loss_64(graph):
 
 def main():
 
-    gen_graph, input_image = build_gen_graph()
+    gen_graph, input_image = build_gen_graph_deep()
     gen_image = gen_graph['output']
 
     style_image = tf.placeholder('float32', [1,224,224,3], name="style_image")
@@ -334,7 +350,7 @@ def main():
 
     graph, images = load_vgg_input(batch)
 
-    content_loss = 0.001 * calc_content_loss(graph)
+    content_loss = 0.0001 * calc_content_loss(graph)
     style_loss = calc_style_loss_64(graph)
     loss = tf.cast(content_loss, tf.float64) + style_loss
 
@@ -363,9 +379,9 @@ def main():
         init = tf.global_variables_initializer()
         sess.run(init)
 
-        #load_gen_weithts(sess, path="\\checkStyleContent_4_plus_2")
+        #load_gen_weithts(sess, path="\\checkStyleContent_4_plus_8")
 
-        for i in range(2000):
+        for i in range(4000):
             if i % 200 == 0:
                 print(sess.run(loss, feed_dict=feed))
                 #print(sess.run(input_image, feed_dict=feed))
@@ -373,13 +389,13 @@ def main():
                 #print(sess.run(variables_gen_filter[0]))
                 print(sess.run(variables_gen_bias, feed_dict=feed))
                 #print(sess.run(variables[0]))
-                save_image('\\output_images\\style_2_plus_6', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True)
+                save_image('\\output_images\\style_4_plus_8', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True)
                 #print(sess.run(gen_graph['conv1_1'], feed_dict=feed))
             sess.run(train_step, feed_dict=feed)
 
-        #save_image('C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer\\output_images\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True)
+        save_image('\\output_images\\style_4_plus_8', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True)
         print(sess.run(loss, feed_dict=feed))
-        save_gen_weights(sess, path="\\checkStyleContent_2_plus_6")
+        save_gen_weights(sess, path="\\checkStyleContent_4_plus_8")
 
 
 
