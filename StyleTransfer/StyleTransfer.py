@@ -24,7 +24,7 @@ def make_sure_path_exists(path):
 
 # returns image of shape [224, 224, 3]
 # [height, width, depth]
-def load_image(path, between_01=False):
+def load_image(path, between_01=False, substract_mean=False):
     # load image
     img = skimage.io.imread(path)
     #img = img / 255.0
@@ -38,16 +38,21 @@ def load_image(path, between_01=False):
     # resize to 224, 224
     resized_img = skimage.transform.resize(crop_img, (224, 224))
     if between_01==False :
-        return resized_img * 255.0
-    else :
-        return resized_img
+        resized_img = resized_img * 255.0
+
+    avg = 0
+    if substract_mean==True:
+        avg = np.sum(resized_img) / (224.0*224.0*3.0)
+        resized_img -= avg
+
+    return resized_img, avg
 
 
-def save_image(path, name, image, to255=False):
+def save_image(path, name, image, to255=False, avg=0):
     # Output should add back the mean.
     #image = image + MEAN_VALUES
     # Get rid of the first useless dimension, what remains is the image.
-    image = image[0]
+    image = image[0] + avg
     if to255 == True :
         image = image * 255.0
     image = np.clip(image, 0, 255).astype('uint8')
@@ -67,9 +72,9 @@ def tensorshape_to_int_array(ts):
         s.append(int(x))
     return s
 
-cat = load_image(project_path + "\\images\\cat.jpg")
-elch = load_image(project_path + "\\images\\elch.jpg")
-style = load_image(project_path + "\\images\\style.jpg")
+cat, avg_cat = load_image(project_path + "\\images\\cat.jpg", between_01=True, substract_mean=False)
+elch, avg_elch = load_image(project_path + "\\images\\elch.jpg", between_01=True, substract_mean=False)
+style, avg_style = load_image(project_path + "\\images\\style.jpg", between_01=True, substract_mean=False)
 
 def load_vgg_input( images, path = project_path + "\\model\\vgg.tfmodel"):
     print('load vgg')
@@ -195,6 +200,14 @@ def _conv2d(prev_layer):
     #return prev_layer+b
 
 
+def _fract_pooling_downsample(prev_layer, name='default_name'):
+    return tf.nn.fractional_avg_pool(prev_layer, [1.0, 224.0/32.0, 224.0/32.0, 1.0], name=name)[0]
+
+
+def _fract_pooling_upsample(prev_layer, name='default_name'):
+    return tf.nn.fractional_avg_pool(prev_layer, [1.0, 31.9/224.0, 31.9/224.0, 1.0], name=name)[0]
+
+
 def _conv2d_relu(prev_layer):
     return _relu(_conv2d(prev_layer))
 
@@ -232,9 +245,9 @@ def build_part_layer(graph, prefix_name, part, deep, amount_conv_layer, index=0)
 
 def build_gen_graph():
     graph = {}
-    input_image = tf.placeholder('float32', [1, 224,224,3], name="ph_input_image")
-    graph['Generator_var_input_image'] = tf.Variable(input_image, trainable=False, name='var_input_image')
-    graph['Generator_L0_LP1'] = tf.sigmoid(_conv2d(graph['Generator_var_input_image']))
+    input_image = tf.placeholder('float32', [1, 224, 224,3], name="ph_input_image")
+    #graph['Generator_var_input_image'] = tf.Variable(input_image, trainable=False, name='var_input_image')
+    graph['Generator_L0_LP1'] = tf.sigmoid(_conv2d(input_image))
     #graph[prefix_name + '_L' + str(index) + '_LP1_P2'] = tf.sigmoid(_conv2d_relu(graph[prefix_name + '_L' + str(index) + '_LP1_P1']))
     graph['output'] = build_part_layer(graph, 'Generator', graph['Generator_L0_LP1'], 2, [2,1])
     return graph, input_image
@@ -243,17 +256,20 @@ def build_gen_graph():
 def build_gen_graph_deep():
     graph = {}
     input_image = tf.placeholder('float32', [1, 224, 224, 3], name="ph_input_image")
-    graph['var_input_image'] = tf.Variable(input_image, trainable=False, name='var_input_image')
-    graph['conv1_1'] = tf.sigmoid(_conv2d(graph['var_input_image']))
+    #graph['var_input_image'] = _fract_pooling_downsample(input_image)
+    #print(graph['var_input_image'].get_shape())
+    graph['conv1_1'] = tf.sigmoid(_conv2d(input_image))
     graph['conv2_1'] = tf.sigmoid(_conv2d(graph['conv1_1']))
     graph['conv3_1'] = tf.sigmoid(_conv2d(graph['conv2_1']))
     graph['conv4_1'] = tf.sigmoid(_conv2d(graph['conv3_1']))
     graph['conv5_1'] = tf.sigmoid(_conv2d(graph['conv4_1']))
-    graph['conv6_1'] = tf.sigmoid(_conv2d(graph['conv5_1']))
+    #graph['conv6_1'] = tf.sigmoid(_conv2d(graph['conv5_1']))
     #graph['conv7_1'] = tf.sigmoid(_conv2d_relu(graph['conv6_1']))
     #graph['conv8_1'] = tf.sigmoid(_conv2d_relu(graph['conv7_1']))
     #graph['conv9_1'] = tf.sigmoid(_conv2d_relu(graph['conv8_1']))
-    graph['output'] = tf.div(tf.sigmoid(_conv2d(graph['conv6_1'])) + 1.0, 2.0, name='output')
+    graph['output'] = tf.div(tf.sigmoid(_conv2d(graph['conv5_1'])) + 1.0, 2.0)
+    #graph['output'] = _fract_pooling_upsample(graph['conv10_1'], name='output')
+    #print(graph['output'].get_shape())
     return graph, input_image
 
 
@@ -337,7 +353,7 @@ def main():
     gen_graph, input_image = build_gen_graph_deep()
     gen_image = gen_graph['output']
 
-    style_image = tf.placeholder('float32', [1,224,224,3], name="style_image")
+    style_image = tf.placeholder('float32', [1, 224, 224,3], name="style_image")
     #style_image = tf.Variable(style.reshape(1,224,224,3), trainable=False, dtype="float32", name="style_image")
 
     #batch = tf.nn.sigmoid(gen_image)
@@ -353,8 +369,8 @@ def main():
     loss = tf.cast(content_loss, tf.float64) + style_loss
 
     feed = {}
-    feed[input_image] = cat.reshape(1,224,224,3) / 255.0
-    feed[style_image] = style.reshape(1,224,224,3) / 255.0
+    feed[input_image] = cat.reshape(1, 224, 224,3)
+    feed[style_image] = style.reshape(1, 224, 224,3)
 
     with tf.Session() as sess:
 
@@ -377,9 +393,10 @@ def main():
         init = tf.global_variables_initializer()
         sess.run(init, feed)
 
-        #load_gen_weithts(sess, path="\\checkStyleContent_30_plus_11")
+        #load_gen_weithts(sess, path="\\checkStyleContent_4_plus_14")
 
-        for i in range(10000):
+        i = 0
+        for i in range(4000):
             if i % 500 == 0:
                 print(sess.run(loss, feed_dict=feed))
                 #print(sess.run(input_image, feed_dict=feed))
@@ -387,13 +404,13 @@ def main():
                 #print(sess.run(variables_gen_filter[0]))
                 print(sess.run(variables_gen_bias, feed_dict=feed))
                 #print(sess.run(variables[0]))
-                save_image('\\output_images\\style_10_plus_12', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True)
+                save_image('\\output_images\\style_4_plus_15', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_cat)
                 #print(sess.run(gen_graph['conv1_1'], feed_dict=feed))
             sess.run(train_step, feed_dict=feed)
 
-        save_image('\\output_images\\style_10_plus_12', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True)
+        save_image('\\output_images\\style_4_plus_14', '\\im' + str(i+1) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_cat)
         print(sess.run(loss, feed_dict=feed))
-        save_gen_weights(sess, path="\\checkStyleContent_10_plus_12")
+        save_gen_weights(sess, path="\\checkStyleContent_4_plus_15")
 
 
 def transform(image, path_to_generator, meta_filename, save_to_directory, filename):
