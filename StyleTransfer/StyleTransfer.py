@@ -75,6 +75,7 @@ def tensorshape_to_int_array(ts):
 cat, avg_cat = load_image(project_path + "\\images\\cat.jpg", between_01=True, substract_mean=False)
 elch, avg_elch = load_image(project_path + "\\images\\elch.jpg", between_01=True, substract_mean=False)
 style, avg_style = load_image(project_path + "\\images\\style.jpg", between_01=True, substract_mean=False)
+tuebingen_neckarfront, avg_tuebingen_neckarfront = load_image(project_path + "\\images\\tuebingen_neckarfront.jpg", between_01=True, substract_mean=False)
 
 def load_vgg_input( images, path = project_path + "\\model\\vgg.tfmodel"):
     print('load vgg')
@@ -191,25 +192,29 @@ variables_gen_filter = []
 variables_gen_bias = []
 
 
-def _conv2d(prev_layer):
-    W = tf.Variable(tf.random_uniform([3,3,3,3], 0.0, 1.0, dtype='float32'), dtype="float32", name="W")
-    b = tf.Variable(tf.random_uniform([3], 0.0, 1.0, dtype='float32'), dtype="float32", name="b")
+def _conv2d(prev_layer, i_num_channel = 3, o_num_filter = 3, strides=[1, 1, 1, 1] ):
+    W = tf.Variable(tf.random_uniform([3,3,i_num_channel, o_num_filter], 0.0, 1.0, dtype='float32'), dtype="float32", name="W")
+    b = tf.Variable(tf.random_uniform([o_num_filter], 0.0, 1.0, dtype='float32'), dtype="float32", name="b")
     variables_gen_filter.append(W)
     variables_gen_bias.append(b)
-    return tf.add(tf.nn.conv2d(prev_layer, filter=W, strides=[1,1,1,1], padding='SAME'), b)
-    #return prev_layer+b
+    return tf.add(tf.nn.conv2d(prev_layer, filter=W, strides=strides, padding='SAME'), b)
 
 
-def _fract_pooling_downsample(prev_layer, name='default_name'):
-    return tf.nn.fractional_avg_pool(prev_layer, [1.0, 224.0/32.0, 224.0/32.0, 1.0], name=name)[0]
-
-
-def _fract_pooling_upsample(prev_layer, name='default_name'):
-    return tf.nn.fractional_avg_pool(prev_layer, [1.0, 31.9/224.0, 31.9/224.0, 1.0], name=name)[0]
+def _fract_conv2d(prev_layer, output_shape, strides, i_num_channel = 3, o_num_filter = 3):
+    W = tf.Variable(tf.random_uniform([3,3,o_num_filter, i_num_channel], 0.0, 1.0, dtype='float32'), dtype="float32", name="W")
+    b = tf.Variable(tf.random_uniform([o_num_filter], 0.0, 1.0, dtype='float32'), dtype="float32", name="b")
+    variables_gen_filter.append(W)
+    variables_gen_bias.append(b)
+    return tf.add(tf.nn.conv2d_transpose(prev_layer, W, output_shape , strides, padding='SAME'), b)
 
 
 def _conv2d_relu(prev_layer):
     return _relu(_conv2d(prev_layer))
+
+
+def _instance_norm(x, epsilon=1e-9):
+    mean, var = tf.nn.moments(x, [1,2], keep_dims=True)
+    return tf.div(tf.sub(x , mean), tf.sqrt(tf.add(var, epsilon)))
 
 
 def build_part_layer(graph, prefix_name, part, deep, amount_conv_layer, index=0):
@@ -258,16 +263,24 @@ def build_gen_graph_deep():
     input_image = tf.placeholder('float32', [1, 224, 224, 3], name="ph_input_image")
     #graph['var_input_image'] = _fract_pooling_downsample(input_image)
     #print(graph['var_input_image'].get_shape())
-    graph['conv1_1'] = tf.sigmoid(_conv2d(input_image))
-    graph['conv2_1'] = tf.sigmoid(_conv2d(graph['conv1_1']))
-    graph['conv3_1'] = tf.sigmoid(_conv2d(graph['conv2_1']))
-    graph['conv4_1'] = tf.sigmoid(_conv2d(graph['conv3_1']))
-    graph['conv5_1'] = tf.sigmoid(_conv2d(graph['conv4_1']))
+    graph['conv1_1'] = _instance_norm(_conv2d(input_image))
+    graph['conv1_2'] = _instance_norm(_conv2d(graph['conv1_1'], strides=[1, 2, 2, 1], i_num_channel = 3, o_num_filter = 6))
+    print(graph['conv1_2'].get_shape())
+    graph['conv2_1'] = _instance_norm(_conv2d(graph['conv1_2'], i_num_channel=6, o_num_filter=6))
+    graph['conv2_2'] = _instance_norm(_conv2d(graph['conv2_1'], strides=[1, 2, 2, 1], i_num_channel=6, o_num_filter=12))
+    print(graph['conv2_2'].get_shape())
+    graph['conv3_1'] = _instance_norm(_conv2d(graph['conv2_2'], i_num_channel=12, o_num_filter=12))
+    graph['conv4_1'] = _instance_norm(_conv2d(graph['conv3_1'], i_num_channel=12, o_num_filter=12))
+    graph['conv4_2'] = _instance_norm(_fract_conv2d(graph['conv4_1'], [1, 112, 112, 6], [1 , 2 , 2, 1], i_num_channel=12, o_num_filter=6))
+    print(graph['conv4_2'].get_shape())
+    graph['conv5_1'] = _instance_norm(_conv2d(graph['conv4_2'], i_num_channel=6, o_num_filter=6))
+    graph['conv5_2'] = _instance_norm(_fract_conv2d(graph['conv5_1'], [1, 224, 224, 3], [1 , 2 , 2, 1], i_num_channel=6, o_num_filter=3))
+    print(graph['conv5_2'].get_shape())
     #graph['conv6_1'] = tf.sigmoid(_conv2d(graph['conv5_1']))
     #graph['conv7_1'] = tf.sigmoid(_conv2d_relu(graph['conv6_1']))
     #graph['conv8_1'] = tf.sigmoid(_conv2d_relu(graph['conv7_1']))
     #graph['conv9_1'] = tf.sigmoid(_conv2d_relu(graph['conv8_1']))
-    graph['output'] = tf.div(tf.sigmoid(_conv2d(graph['conv5_1'])) + 1.0, 2.0)
+    graph['output'] = tf.div(tf.sigmoid(_conv2d(graph['conv5_2'])) + 1.0, 2.0)
     #graph['output'] = _fract_pooling_upsample(graph['conv10_1'], name='output')
     #print(graph['output'].get_shape())
     return graph, input_image
@@ -356,20 +369,24 @@ def main():
     style_image = tf.placeholder('float32', [1, 224, 224,3], name="style_image")
     #style_image = tf.Variable(style.reshape(1,224,224,3), trainable=False, dtype="float32", name="style_image")
 
+    avg_custom = np.array([123.68 / 255.0, 116.779 / 255.0, 103.939 / 255.0]).reshape([1,1,1,3])
+    tf_avg = tf.constant(avg_custom, dtype="float32")
+
     #batch = tf.nn.sigmoid(gen_image)
-    batch = gen_image
-    batch = tf.concat(0, [batch, input_image])
-    batch = tf.concat(0, [batch, style_image])
+    batch = gen_image - tf_avg
+    batch = tf.concat(0, [batch, input_image - tf_avg])
+    batch = tf.concat(0, [batch, style_image - tf_avg])
     assert batch.get_shape() == (3, 224, 224, 3)
 
     graph = load_vgg_input(batch)
 
-    content_loss = 0.0001 * calc_content_loss(graph)
+
+    content_loss = 0.001 * calc_content_loss(graph)
     style_loss = calc_style_loss_64(graph)
     loss = tf.cast(content_loss, tf.float64) + style_loss
 
     feed = {}
-    feed[input_image] = cat.reshape(1, 224, 224,3)
+    feed[input_image] = tuebingen_neckarfront.reshape(1, 224, 224,3)
     feed[style_image] = style.reshape(1, 224, 224,3)
 
     with tf.Session() as sess:
@@ -396,21 +413,22 @@ def main():
         #load_gen_weithts(sess, path="\\checkStyleContent_4_plus_14")
 
         i = 0
-        for i in range(4000):
-            if i % 500 == 0:
+        for i in range(2000):
+            print(i)
+            if i % 250 == 0:
                 print(sess.run(loss, feed_dict=feed))
                 #print(sess.run(input_image, feed_dict=feed))
                 #print(sess.run(gen_image, feed_dict=feed))
                 #print(sess.run(variables_gen_filter[0]))
-                print(sess.run(variables_gen_bias, feed_dict=feed))
+                #print(sess.run(variables_gen_bias, feed_dict=feed))
                 #print(sess.run(variables[0]))
-                save_image('\\output_images\\style_4_plus_15', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_cat)
+                save_image('\\output_images\\style_2_plus_22_k', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
                 #print(sess.run(gen_graph['conv1_1'], feed_dict=feed))
             sess.run(train_step, feed_dict=feed)
 
-        save_image('\\output_images\\style_4_plus_14', '\\im' + str(i+1) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_cat)
+        save_image('\\output_images\\style_2_plus_22_k', '\\im' + str(i+1) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
         print(sess.run(loss, feed_dict=feed))
-        save_gen_weights(sess, path="\\checkStyleContent_4_plus_15")
+        save_gen_weights(sess, path="\\checkStyleContent_2_plus_22_k")
 
 
 def transform(image, path_to_generator, meta_filename, save_to_directory, filename):
