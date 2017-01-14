@@ -192,24 +192,25 @@ variables_gen_filter = []
 variables_gen_bias = []
 
 
-def _conv2d(prev_layer, i_num_channel = 3, o_num_filter = 3, strides=[1, 1, 1, 1] ):
-    W = tf.Variable(tf.random_uniform([3,3,i_num_channel, o_num_filter], 0.0, 1.0, dtype='float32'), dtype="float32", name="W")
+def _conv2d(prev_layer, i_num_channel = 3, o_num_filter = 3, strides=[1, 1, 1, 1], filter_size=3):
+    W = tf.Variable(tf.random_uniform([filter_size, filter_size ,i_num_channel, o_num_filter], 0.0, 1.0, dtype='float32'), dtype="float32", name="W")
     b = tf.Variable(tf.random_uniform([o_num_filter], 0.0, 1.0, dtype='float32'), dtype="float32", name="b")
     variables_gen_filter.append(W)
     variables_gen_bias.append(b)
     return tf.add(tf.nn.conv2d(prev_layer, filter=W, strides=strides, padding='SAME'), b)
 
 
-def _fract_conv2d(prev_layer, output_shape, strides, i_num_channel = 3, o_num_filter = 3):
+def _fract_conv2d(prev_layer, strides, i_num_channel = 3, o_num_filter = 3):
     W = tf.Variable(tf.random_uniform([3,3,o_num_filter, i_num_channel], 0.0, 1.0, dtype='float32'), dtype="float32", name="W")
     b = tf.Variable(tf.random_uniform([o_num_filter], 0.0, 1.0, dtype='float32'), dtype="float32", name="b")
     variables_gen_filter.append(W)
     variables_gen_bias.append(b)
-    return tf.add(tf.nn.conv2d_transpose(prev_layer, W, output_shape , strides, padding='SAME'), b)
+    shape = tensorshape_to_int_array(prev_layer.get_shape())
+    return tf.add(tf.nn.conv2d_transpose(prev_layer, W, [1, 2*shape[1], 2*shape[2], o_num_filter ] , strides, padding='SAME'), b)
 
 
-def _conv2d_relu(prev_layer):
-    return _relu(_conv2d(prev_layer))
+def _conv2d_relu(prev_layer, i_num_channel = 3, o_num_filter = 3, strides=[1, 1, 1, 1], filter_size=3):
+    return _relu(_conv2d(prev_layer, i_num_channel=i_num_channel, o_num_filter=o_num_filter, strides=strides, filter_size=filter_size))
 
 
 def _instance_norm(x, epsilon=1e-9):
@@ -263,26 +264,34 @@ def build_gen_graph_deep():
     input_image = tf.placeholder('float32', [1, 224, 224, 3], name="ph_input_image")
     #graph['var_input_image'] = _fract_pooling_downsample(input_image)
     #print(graph['var_input_image'].get_shape())
-    graph['conv1_1'] = _instance_norm(_conv2d(input_image))
-    graph['conv1_2'] = _instance_norm(_conv2d(graph['conv1_1'], strides=[1, 2, 2, 1], i_num_channel = 3, o_num_filter = 6))
-    print(graph['conv1_2'].get_shape())
-    graph['conv2_1'] = _instance_norm(_conv2d(graph['conv1_2'], i_num_channel=6, o_num_filter=6))
-    graph['conv2_2'] = _instance_norm(_conv2d(graph['conv2_1'], strides=[1, 2, 2, 1], i_num_channel=6, o_num_filter=12))
-    print(graph['conv2_2'].get_shape())
-    graph['conv3_1'] = _instance_norm(_conv2d(graph['conv2_2'], i_num_channel=12, o_num_filter=12))
-    graph['conv4_1'] = _instance_norm(_conv2d(graph['conv3_1'], i_num_channel=12, o_num_filter=12))
-    graph['conv4_2'] = _instance_norm(_fract_conv2d(graph['conv4_1'], [1, 112, 112, 6], [1 , 2 , 2, 1], i_num_channel=12, o_num_filter=6))
-    print(graph['conv4_2'].get_shape())
-    graph['conv5_1'] = _instance_norm(_conv2d(graph['conv4_2'], i_num_channel=6, o_num_filter=6))
-    graph['conv5_2'] = _instance_norm(_fract_conv2d(graph['conv5_1'], [1, 224, 224, 3], [1 , 2 , 2, 1], i_num_channel=6, o_num_filter=3))
-    print(graph['conv5_2'].get_shape())
-    #graph['conv6_1'] = tf.sigmoid(_conv2d(graph['conv5_1']))
-    #graph['conv7_1'] = tf.sigmoid(_conv2d_relu(graph['conv6_1']))
-    #graph['conv8_1'] = tf.sigmoid(_conv2d_relu(graph['conv7_1']))
-    #graph['conv9_1'] = tf.sigmoid(_conv2d_relu(graph['conv8_1']))
-    graph['output'] = tf.div(tf.sigmoid(_conv2d(graph['conv5_2'])) + 1.0, 2.0)
-    #graph['output'] = _fract_pooling_upsample(graph['conv10_1'], name='output')
-    #print(graph['output'].get_shape())
+    graph['conv1_0'] = _instance_norm(_conv2d(input_image, filter_size=9, o_num_filter=32))
+    print(graph['conv1_0'].get_shape())
+
+    graph['conv2_0'] = _instance_norm(_conv2d(graph['conv1_0'], strides=[1, 2, 2, 1], i_num_channel = 32, o_num_filter = 64))
+    print(graph['conv2_0'].get_shape())
+    graph['conv2_1'] = _instance_norm(_conv2d(graph['conv2_0'], strides=[1, 2, 2, 1], i_num_channel=64, o_num_filter=128))
+    print(graph['conv2_1'].get_shape())
+
+    graph['conv3_0_0'] = _relu(_instance_norm(_conv2d(graph['conv2_1'], i_num_channel=128, o_num_filter=128)))
+    graph['conv3_0_1'] = _relu(_instance_norm(_conv2d(graph['conv3_0_0'], i_num_channel=128, o_num_filter=128)))
+    graph['conv3_1_0'] = _relu(_instance_norm(_conv2d(graph['conv3_0_1'], i_num_channel=128, o_num_filter=128)))
+    graph['conv3_1_1'] = _relu(_instance_norm(_conv2d(graph['conv3_1_0'], i_num_channel=128, o_num_filter=128)))
+    graph['conv3_2_0'] = _relu(_instance_norm(_conv2d(graph['conv3_1_1'], i_num_channel=128, o_num_filter=128)))
+    graph['conv3_2_1'] = _relu(_instance_norm(_conv2d(graph['conv3_2_0'], i_num_channel=128, o_num_filter=128)))
+    graph['conv3_3_0'] = _relu(_instance_norm(_conv2d(graph['conv3_2_1'], i_num_channel=128, o_num_filter=128)))
+    graph['conv3_3_1'] = _relu(_instance_norm(_conv2d(graph['conv3_3_0'], i_num_channel=128, o_num_filter=128)))
+    graph['conv3_4_0'] = _relu(_instance_norm(_conv2d(graph['conv3_3_1'], i_num_channel=128, o_num_filter=128)))
+    graph['conv3_4_1'] = _relu(_instance_norm(_conv2d(graph['conv3_4_0'], i_num_channel=128, o_num_filter=128)))
+    print(graph['conv3_4_1'].get_shape())
+
+    graph['conv4_0'] = _instance_norm(_fract_conv2d(graph['conv3_4_1'], [1, 2, 2, 1], i_num_channel=128, o_num_filter=64))
+    print(graph['conv4_0'].get_shape())
+    graph['conv4_1'] = _instance_norm(_fract_conv2d(graph['conv4_0'], [1, 2, 2, 1], i_num_channel=64, o_num_filter=32))
+    print(graph['conv4_1'].get_shape())
+
+    graph['conv5_0'] = _instance_norm(_conv2d(graph['conv4_1'], i_num_channel=32, o_num_filter=3, filter_size=9))
+
+    graph['output'] = tf.tanh(graph['conv5_0'], 'output')
     return graph, input_image
 
 
@@ -293,7 +302,7 @@ def calc_gram(single_picture_tensor_conv):
     return tf.matmul(tf.transpose(tensor_conv_reshape), tensor_conv_reshape)
 
 
-def calc_content_loss(graph, layer = "import/conv4_1/Relu:0"):
+def calc_content_loss(graph, layer = "import/conv3_3/Relu:0"):
     tensor_conv = graph.get_tensor_by_name(layer)
     content_l= tf.reduce_sum(tf.square(tensor_conv[0] - tensor_conv[1]), name='content_loss')
     return content_l
@@ -305,23 +314,23 @@ def calc_gen_content_loss(gen, original):
 
 
 def calc_style_loss_64(graph):
-    tensor_conv1_1 = graph.get_tensor_by_name("import/conv1_1/Relu:0")
-    tensor_conv2_1 = graph.get_tensor_by_name("import/conv2_1/Relu:0")
-    tensor_conv3_1 = graph.get_tensor_by_name("import/conv3_1/Relu:0")
-    tensor_conv4_1 = graph.get_tensor_by_name("import/conv4_1/Relu:0")
-    tensor_conv5_1 = graph.get_tensor_by_name("import/conv5_1/Relu:0")
+    tensor_conv1_1 = graph.get_tensor_by_name("import/conv1_2/Relu:0")
+    tensor_conv2_1 = graph.get_tensor_by_name("import/conv2_2/Relu:0")
+    tensor_conv3_1 = graph.get_tensor_by_name("import/conv3_2/Relu:0")
+    tensor_conv4_1 = graph.get_tensor_by_name("import/conv4_2/Relu:0")
+    #tensor_conv5_1 = graph.get_tensor_by_name("import/conv5_2/Relu:0")
 
     tensor_gen_gram1_1 = calc_gram(tensor_conv1_1[0])
     tensor_gen_gram2_1 = calc_gram(tensor_conv2_1[0])
     tensor_gen_gram3_1 = calc_gram(tensor_conv3_1[0])
     tensor_gen_gram4_1 = calc_gram(tensor_conv4_1[0])
-    tensor_gen_gram5_1 = calc_gram(tensor_conv5_1[0])
+    #tensor_gen_gram5_1 = calc_gram(tensor_conv5_1[0])
 
     tensor_style_gram1_1 = calc_gram(tensor_conv1_1[2])
     tensor_style_gram2_1 = calc_gram(tensor_conv2_1[2])
     tensor_style_gram3_1 = calc_gram(tensor_conv3_1[2])
     tensor_style_gram4_1 = calc_gram(tensor_conv4_1[2])
-    tensor_style_gram5_1 = calc_gram(tensor_conv5_1[2])
+    #tensor_style_gram5_1 = calc_gram(tensor_conv5_1[2])
 
     s = tensorshape_to_int_array(tensor_conv1_1.get_shape())
     style_loss1_1_nominator = tf.reduce_sum(
@@ -347,13 +356,13 @@ def calc_style_loss_64(graph):
     style_loss4_1_denominator = tf.cast(4.0 * (s[1] * s[2]) ** 2 * s[3] ** 2.0, tf.float64)
     style_loss4_1 = tf.div(style_loss4_1_nominator, style_loss4_1_denominator)
 
-    s = tensorshape_to_int_array(tensor_conv5_1.get_shape())
-    style_loss5_1_nominator = tf.reduce_sum(
-        tf.pow(tf.cast(tensor_gen_gram5_1, tf.float64) - tf.cast(tensor_style_gram5_1, tf.float64), 2))
-    style_loss5_1_denominator = tf.cast(4.0 * (s[1] * s[2]) ** 2 * s[3] ** 2.0, tf.float64)
-    style_loss5_1 = tf.div(style_loss5_1_nominator, style_loss5_1_denominator)
+    #s = tensorshape_to_int_array(tensor_conv5_1.get_shape())
+    #style_loss5_1_nominator = tf.reduce_sum(
+    #    tf.pow(tf.cast(tensor_gen_gram5_1, tf.float64) - tf.cast(tensor_style_gram5_1, tf.float64), 2))
+    #style_loss5_1_denominator = tf.cast(4.0 * (s[1] * s[2]) ** 2 * s[3] ** 2.0, tf.float64)
+    #style_loss5_1 = tf.div(style_loss5_1_nominator, style_loss5_1_denominator)
 
-    style_l = style_loss1_1 + style_loss2_1 + style_loss3_1 + style_loss4_1 + style_loss5_1
+    style_l = style_loss1_1 + style_loss2_1 + style_loss3_1 + style_loss4_1
     return style_l
 
 
@@ -410,10 +419,10 @@ def main():
         init = tf.global_variables_initializer()
         sess.run(init, feed)
 
-        #load_gen_weithts(sess, path="\\checkStyleContent_4_plus_14")
+        #load_gen_weithts(sess, path="\\checkStyleContent_34_plus_34_k")
 
         i = 0
-        for i in range(2000):
+        for i in range(6000):
             print(i)
             if i % 250 == 0:
                 print(sess.run(loss, feed_dict=feed))
@@ -422,13 +431,13 @@ def main():
                 #print(sess.run(variables_gen_filter[0]))
                 #print(sess.run(variables_gen_bias, feed_dict=feed))
                 #print(sess.run(variables[0]))
-                save_image('\\output_images\\style_2_plus_22_k', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
+                save_image('\\output_images\\style_5_plus_36_k', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
                 #print(sess.run(gen_graph['conv1_1'], feed_dict=feed))
             sess.run(train_step, feed_dict=feed)
 
-        save_image('\\output_images\\style_2_plus_22_k', '\\im' + str(i+1) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
+        save_image('\\output_images\\style_5_plus_36_k', '\\im' + str(i+1) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
         print(sess.run(loss, feed_dict=feed))
-        save_gen_weights(sess, path="\\checkStyleContent_2_plus_22_k")
+        save_gen_weights(sess, path="\\checkStyleContent_5_plus_36_k")
 
 
 def transform(image, path_to_generator, meta_filename, save_to_directory, filename):
