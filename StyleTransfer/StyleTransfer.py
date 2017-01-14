@@ -123,12 +123,19 @@ def save_gen_weights(sess, path="", name="\\checkpoint.data"):
 
 def export_gen_weights_android(sess, variables, path):
     for v in variables:
-        with open(project_path + path + v.name, mode='w+') as f :
-            shape = str(tensorshape_to_int_array(v.get_shape()));
-            f.write(shape[1:(len(shape) - 1)])
-            f.write('\n')
-            variable = sess.run(v)
-            f.write(np.reshape(variable, [1] ))
+        make_sure_path_exists(project_path + path)
+
+        f = open(project_path + path + "\\" + str(v.name)[0:(len(str(v.name))-2)], 'a')
+        int_shape = tensorshape_to_int_array(v.get_shape())
+        shape = str(int_shape)
+        f.write(shape[1:(len(shape) - 1)])
+        f.write("\n")
+        variable = sess.run(v)
+        to_write = np.reshape(variable, np.prod(int_shape))
+        for a in to_write:
+            f.write(str(a))
+            f.write("\n")
+        f.close()
 
 
 def _relu(conv2d_layer):
@@ -170,7 +177,7 @@ def build_gen_graph_deep():
     input_image = tf.placeholder('float32', [1, 224, 224, 3], name="ph_input_image")
     #graph['var_input_image'] = _fract_pooling_downsample(input_image)
     #print(graph['var_input_image'].get_shape())
-    graph['conv1_0'] = _instance_norm(_conv2d(input_image, filter_size=9, o_num_filter=32))
+    graph['conv1_0'] = _instance_norm(_conv2d(tf.mul(input_image, 255.0), filter_size=9, o_num_filter=32))
     print(graph['conv1_0'].get_shape())
 
     graph['conv2_0'] = _instance_norm(_conv2d(graph['conv1_0'], strides=[1, 2, 2, 1], i_num_channel = 32, o_num_filter = 64))
@@ -320,20 +327,20 @@ def main():
         init = tf.global_variables_initializer()
         sess.run(init, feed)
 
-        #load_gen_weithts(sess, path="\\checkStyleContent_34_plus_34_k")
+        load_gen_weithts(sess, path="\\checkStyleContent_5_plus_38  _k")
 
         i = 0
-        for i in range(20000):
+        for i in range(25000):
             print(i)
             if i % 250 == 0:
-                save_image('\\output_images\\style_20_plus_37_k', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
+                save_image('\\output_images\\style_25_plus_38_k', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
                 #print(sess.run(gen_graph['conv1_1'], feed_dict=feed))
             sess.run(train_step, feed_dict=feed)
 
-        save_image('\\output_images\\style_20_plus_37_k', '\\im' + str(i+1) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
+        save_image('\\output_images\\style_25_plus_38_k', '\\im' + str(i+1) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
         print(sess.run(loss, feed_dict=feed))
-        save_gen_weights(sess, path="\\checkStyleContent_20_plus_37_k")
-        #export_gen_weights_android(sess, variables, '\\test')
+        save_gen_weights(sess, path="\\checkStyleContent_25_plus_38_k")
+        #export_gen_weights_android(sess, variables, "\\android_exports")
 
 
 def transform(image, path_to_generator, meta_filename, save_to_directory, filename):
