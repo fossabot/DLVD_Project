@@ -77,16 +77,20 @@ elch, avg_elch = load_image(project_path + "\\images\\elch.jpg", between_01=True
 style, avg_style = load_image(project_path + "\\images\\style.jpg", between_01=True, substract_mean=False)
 tuebingen_neckarfront, avg_tuebingen_neckarfront = load_image(project_path + "\\images\\tuebingen_neckarfront.jpg", between_01=True, substract_mean=False)
 
-def load_vgg_input( images, path = project_path + "\\model\\vgg.tfmodel"):
+
+def load_vgg_input(batch, path = project_path + "\\model\\vgg.tfmodel"):
     print('load vgg')
     with open(path, mode='rb') as f:
         fileContent = f.read()
     graph_def = tf.GraphDef()
     graph_def.ParseFromString(fileContent)
-    #images = tf.placeholder("float32", [None, 224, 224, 3])
-    tf.import_graph_def(graph_def, input_map={"images": images})
+
+    avg_custom = np.array([123.68 / 255.0, 116.779 / 255.0, 103.939 / 255.0]).reshape([1, 1, 1, 3])
+    vgg_average = tf.constant(avg_custom, dtype="float32")
+    tf.import_graph_def(graph_def, input_map={"images": tf.div(batch, vgg_average)})
     #print("graph loaded from disk")
     print('Done')
+
     return tf.get_default_graph()
 
 
@@ -117,72 +121,14 @@ def save_gen_weights(sess, path="", name="\\checkpoint.data"):
     print('Done')
 
 
-def _slice_tensor(tensor):
-    shape = tensorshape_to_int_array(tensor.get_shape());
-    half1 = int(shape[1]/2)
-    half2 = int(shape[2]/2)
-    halfhalf1 = int(half1 / 2)
-    halfhalf2 = int(half2 / 2)
-
-    p1 = tf.slice(tensor, [0, 0, 0, 0], [1, half1 + halfhalf1, half2 + halfhalf2, shape[3]])
-    p2 = tf.slice(tensor, [0, halfhalf1, 0, 0], [1, half1 + halfhalf1, half2 + halfhalf2, shape[3]])
-    p3 = tf.slice(tensor, [0, 0, halfhalf2, 0], [1, half1 + halfhalf1, half2 + halfhalf2, shape[3]])
-    p4 = tf.slice(tensor, [0, halfhalf1, halfhalf2, 0], [1, half1 + halfhalf1, half2 + halfhalf2, shape[3]])
-    return p1, p2, p3, p4
-
-
-def _concat_parts(p1, p2, p3, p4, name=''):
-    shape = tensorshape_to_int_array(p1.get_shape())
-    shape = (shape[0], int(4*shape[1]/3), int(4*shape[2]/3), shape[3])
-
-    #assert(shape[1] == 224)
-    #assert (shape[2] == 224)
-
-    half1 = int(shape[1] / 2)
-    half2 = int(shape[2] / 2)
-    halfhalf1 = int(half1 / 2)
-    halfhalf2 = int(half2 / 2)
-
-
-    horizontal_add = tf.constant(np.zeros([1, halfhalf1, half2 + halfhalf2, shape[3]]), "float32")
-    vertical_add = tf.constant(np.zeros([1, 2*half1, halfhalf2, shape[3]]), "float32")
-
-    var = tf.constant(np.zeros(shape), dtype="float32")
-    var2 = tf.add(var, tf.concat(2, [tf.concat(1, [p1, horizontal_add]), vertical_add]))
-    var3 = tf.add(var2, tf.concat(2, [tf.concat(1, [horizontal_add, p2]), vertical_add]))
-    var4 = tf.add(var3, tf.concat(2, [vertical_add, tf.concat(1, [p3, horizontal_add])]))
-    var5 = tf.add(var4, tf.concat(2, [vertical_add, tf.concat(1, [horizontal_add, p4])]))
-
-    a_div = np.zeros(shape, dtype="float32")
-    a_div.fill(1.0)
-    for i in range(half1):
-        for j in range(halfhalf2):
-            for k in range(shape[3]):
-                a_div[0, halfhalf1 + i, j, k] = 2
-
-    for i in range(half1):
-        for j in range(halfhalf2):
-            for k in range(shape[3]):
-                a_div[0, halfhalf1 + i, shape[2] - 1 - j, k] = 2
-
-    for i in range(halfhalf1):
-        for j in range(half2):
-            for k in range(shape[3]):
-                a_div[0, i, halfhalf2 + j, k] = 2
-
-    for i in range(halfhalf1):
-        for j in range(half2):
-            for k in range(shape[3]):
-                a_div[0, shape[1] - 1 - i, halfhalf2 + j, k] = 2
-
-    for i in range(half1):
-        for j in range(half2):
-            for k in range(shape[3]):
-                a_div[0, halfhalf1 + i, halfhalf2 + j, k] = 4
-
-    var_div = tf.constant(a_div)
-    var6 = tf.div(var5, var_div, name=name)
-    return var6
+def export_gen_weights_android(sess, variables, path):
+    for v in variables:
+        with open(project_path + path + v.name, mode='w+') as f :
+            shape = str(tensorshape_to_int_array(v.get_shape()));
+            f.write(shape[1:(len(shape) - 1)])
+            f.write('\n')
+            variable = sess.run(v)
+            f.write(np.reshape(variable, [1] ))
 
 
 def _relu(conv2d_layer):
@@ -217,46 +163,6 @@ def _instance_norm(x, epsilon=1e-9):
     mean, var = tf.nn.moments(x, [1,2], keep_dims=True)
     return tf.div(tf.sub(x , mean), tf.sqrt(tf.add(var, epsilon)))
 
-
-def build_part_layer(graph, prefix_name, part, deep, amount_conv_layer, index=0):
-    if index == 0:
-        assert len(amount_conv_layer) == deep
-
-    if deep > 0:
-        p1, p2, p3, p4 = _slice_tensor(part)
-        parts = [p1, p2, p3, p4]
-
-        counter = 1
-        for p in parts:
-            graph[prefix_name + '_L' + str(index) + '_LP1_P' + str(counter) + '_1'] = tf.sigmoid(_conv2d(p))
-            for i in range(amount_conv_layer[index] - 1):
-                graph[prefix_name + '_L' + str(index) + '_LP1_P' + str(counter) + '_' + str(i+2)] = tf.sigmoid(_conv2d(graph[prefix_name + '_L' + str(index) + '_LP1_P' + str(counter) + '_' + str(i+1)]))
-            counter = counter + 1
-
-        p1 = build_part_layer(graph, prefix_name, graph[prefix_name + '_L' + str(index) + '_LP1_P1_' + str(amount_conv_layer[index])], deep - 1, amount_conv_layer, index + 1)
-        p2 = build_part_layer(graph, prefix_name, graph[prefix_name + '_L' + str(index) + '_LP1_P2_' + str(amount_conv_layer[index])], deep - 1, amount_conv_layer, index + 1)
-        p3 = build_part_layer(graph, prefix_name, graph[prefix_name + '_L' + str(index) + '_LP1_P3_' + str(amount_conv_layer[index])], deep - 1, amount_conv_layer, index + 1)
-        p4 = build_part_layer(graph, prefix_name, graph[prefix_name + '_L' + str(index) + '_LP1_P4_' + str(amount_conv_layer[index])], deep - 1, amount_conv_layer, index + 1)
-
-        if(index == 0):
-            graph[prefix_name + '_L' + str(index) + '_LP2'] = _concat_parts(p1, p2, p3, p4, 'output')
-        else:
-            graph[prefix_name + '_L' + str(index) + '_LP2'] = _concat_parts(p1, p2, p3, p4)
-
-        return graph[prefix_name + '_L' + str(index) + '_LP2']
-
-    else:
-        return part
-
-
-def build_gen_graph():
-    graph = {}
-    input_image = tf.placeholder('float32', [1, 224, 224,3], name="ph_input_image")
-    #graph['Generator_var_input_image'] = tf.Variable(input_image, trainable=False, name='var_input_image')
-    graph['Generator_L0_LP1'] = tf.sigmoid(_conv2d(input_image))
-    #graph[prefix_name + '_L' + str(index) + '_LP1_P2'] = tf.sigmoid(_conv2d_relu(graph[prefix_name + '_L' + str(index) + '_LP1_P1']))
-    graph['output'] = build_part_layer(graph, 'Generator', graph['Generator_L0_LP1'], 2, [2,1])
-    return graph, input_image
 
 
 def build_gen_graph_deep():
@@ -376,19 +282,13 @@ def main():
     gen_image = gen_graph['output']
 
     style_image = tf.placeholder('float32', [1, 224, 224,3], name="style_image")
-    #style_image = tf.Variable(style.reshape(1,224,224,3), trainable=False, dtype="float32", name="style_image")
 
-    avg_custom = np.array([123.68 / 255.0, 116.779 / 255.0, 103.939 / 255.0]).reshape([1,1,1,3])
-    tf_avg = tf.constant(avg_custom, dtype="float32")
-
-    #batch = tf.nn.sigmoid(gen_image)
-    batch = gen_image - tf_avg
-    batch = tf.concat(0, [batch, input_image - tf_avg])
-    batch = tf.concat(0, [batch, style_image - tf_avg])
+    batch = gen_image
+    batch = tf.concat(0, [batch, input_image])
+    batch = tf.concat(0, [batch, style_image])
     assert batch.get_shape() == (3, 224, 224, 3)
 
     graph = load_vgg_input(batch)
-
 
     content_loss = 0.001 * calc_content_loss(graph)
     style_loss = calc_style_loss_64(graph)
@@ -397,6 +297,7 @@ def main():
     feed = {}
     feed[input_image] = tuebingen_neckarfront.reshape(1, 224, 224,3)
     feed[style_image] = style.reshape(1, 224, 224,3)
+
 
     with tf.Session() as sess:
 
@@ -422,22 +323,17 @@ def main():
         #load_gen_weithts(sess, path="\\checkStyleContent_34_plus_34_k")
 
         i = 0
-        for i in range(6000):
+        for i in range(20000):
             print(i)
             if i % 250 == 0:
-                print(sess.run(loss, feed_dict=feed))
-                #print(sess.run(input_image, feed_dict=feed))
-                #print(sess.run(gen_image, feed_dict=feed))
-                #print(sess.run(variables_gen_filter[0]))
-                #print(sess.run(variables_gen_bias, feed_dict=feed))
-                #print(sess.run(variables[0]))
-                save_image('\\output_images\\style_5_plus_36_k', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
+                save_image('\\output_images\\style_20_plus_37_k', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
                 #print(sess.run(gen_graph['conv1_1'], feed_dict=feed))
             sess.run(train_step, feed_dict=feed)
 
-        save_image('\\output_images\\style_5_plus_36_k', '\\im' + str(i+1) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
+        save_image('\\output_images\\style_20_plus_37_k', '\\im' + str(i+1) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
         print(sess.run(loss, feed_dict=feed))
-        save_gen_weights(sess, path="\\checkStyleContent_5_plus_36_k")
+        save_gen_weights(sess, path="\\checkStyleContent_20_plus_37_k")
+        #export_gen_weights_android(sess, variables, '\\test')
 
 
 def transform(image, path_to_generator, meta_filename, save_to_directory, filename):
@@ -451,20 +347,6 @@ def transform(image, path_to_generator, meta_filename, save_to_directory, filena
         make_sure_path_exists(project_path + '\\output_images' + save_to_directory)
         save_image('\\output_images' + save_to_directory, filename, x, True)
 
-
-def test():
-    with tf.Session() as sess:
-        init = tf.global_variables_initializer()
-
-        val = np.zeros([1,4,4,1])
-        val.fill(1.0)
-        c = tf.constant(val, dtype="float64")
-        print(sess.run(c))
-        p1, p2, p3, p4 = _slice_tensor(c)
-
-        x = _concat_parts(p1, p2, p3, p4)
-        sess.run(init)
-        print(sess.run(x))
 
 main()
 #transform(np.reshape(elch, [1,224,224,3]), '\\tmp\\checkStyleContent_10_plus_12', '\\checkpoint.data.meta', '\\style_10_plus_12', '\\elch.jpg')
