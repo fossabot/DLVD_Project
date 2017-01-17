@@ -178,4 +178,4 @@ Temporary Items
 *.tfmodel
 StyleTransfer/logs/
 StyleTransfer/tmp
-StyleTransfer/android_exports
+StyleTransfer/android_export

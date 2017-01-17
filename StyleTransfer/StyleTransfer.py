@@ -327,20 +327,20 @@ def main():
         init = tf.global_variables_initializer()
         sess.run(init, feed)
 
-        load_gen_weithts(sess, path="\\checkStyleContent_5_plus_38  _k")
+        #load_gen_weithts(sess, path="\\checkStyleContent_5_plus_38  _k")
 
         i = 0
-        for i in range(25000):
+        for i in range(2):
             print(i)
             if i % 250 == 0:
-                save_image('\\output_images\\style_25_plus_38_k', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
+                save_image('\\output_images\\style_10_plus_39_k', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
                 #print(sess.run(gen_graph['conv1_1'], feed_dict=feed))
             sess.run(train_step, feed_dict=feed)
 
-        save_image('\\output_images\\style_25_plus_38_k', '\\im' + str(i+1) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
+        save_image('\\output_images\\style_10_plus_39_k', '\\im' + str(i+1) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
         print(sess.run(loss, feed_dict=feed))
-        save_gen_weights(sess, path="\\checkStyleContent_25_plus_38_k")
-        #export_gen_weights_android(sess, variables, "\\android_exports")
+        save_gen_weights(sess, path="\\checkStyleContent_10_plus_39_k")
+        export_gen_weights_android(sess, variables, "\\android_exports")
 
 
 def transform(image, path_to_generator, meta_filename, save_to_directory, filename):
