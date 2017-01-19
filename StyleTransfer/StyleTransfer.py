@@ -97,19 +97,23 @@ def load_gen_graph(path_to_graph_directory, meta_file_name):
     return tf.get_default_graph()
 
 
-def load_gen_weithts(sess, path=""):
-    print("load generator weights")
+def create_saver(sess) :
+    print("create saver")
     saver = tf.train.Saver(tf.all_variables())
-    #saver = tf.train.Saver(tf.all_variables())
+    print('Done')
+    return saver
+
+
+def load_gen_last_checkpoint(sess, saver,  path=""):
+    print("load last checkpoint")
     c_path = project_path + "\\tmp" + path
     print(c_path)
-    saver.restore(sess, tf.train.latest_checkpoint(c_path))  # now OK
+    saver.restore(sess, tf.train.latest_checkpoint(c_path))
     print("DONE")
 
 
-def save_gen_weights(sess, path="", name="\\checkpoint.data"):
-    print('save generator weights')
-    saver = tf.train.Saver(tf.all_variables())
+def save_gen_checkpoint(sess, saver, path="", name="\\checkpoint.data"):
+    print('save checkpoint')
     make_sure_path_exists(project_path + "\\tmp" + path)
     saver.save(sess, project_path + "\\tmp" + path + name)
     print('Done')
@@ -119,7 +123,7 @@ def export_gen_weights_android(sess, variables, path):
     for v in variables:
         make_sure_path_exists(project_path + path)
 
-        f = open(project_path + path + "\\" + str(v.name)[0:(len(str(v.name))-2)], 'a')
+        f = open(project_path + path + "\\" + str(v.name)[0:(len(str(v.name))-2)], 'w')
         int_shape = tensorshape_to_int_array(v.get_shape())
         shape = str(int_shape)
         f.write(shape[1:(len(shape) - 1)])
@@ -139,17 +143,32 @@ variables_gen_filter = []
 variables_gen_bias = []
 
 
+def _weight_loss():
+    _w_loss = tf.reduce_sum(tf.square(variables_gen_filter[0]))
+    for w in variables_gen_filter[1:]:
+        _w_loss = tf.add(tf.reduce_sum(tf.square(w)), _w_loss)
+
+    _b_loss = tf.reduce_sum(tf.square(variables_gen_bias[0]))
+    for b in variables_gen_filter[1:]:
+        _b_loss = tf.add(tf.reduce_sum(tf.square(b)), _b_loss)
+
+    return tf.add(_w_loss, _b_loss)
+
+
+
 def _conv2d(prev_layer, i_num_channel = 3, o_num_filter = 3, strides=[1, 1, 1, 1], filter_size=3, pad='SAME'):
-    W = tf.Variable(tf.random_normal([filter_size, filter_size ,i_num_channel, o_num_filter], 0.0, 1.0, dtype='float32'), dtype="float32", name="W")
-    b = tf.Variable(tf.random_normal([o_num_filter], 0.0, 1.0, dtype='float32'), dtype="float32", name="b")
+    var = np.sqrt(2.0 / (filter_size * filter_size * i_num_channel))
+    W = tf.Variable(tf.random_normal([filter_size, filter_size ,i_num_channel, o_num_filter], dtype='float32', stddev=var), dtype="float32", name="W")
+    b = tf.Variable(tf.random_normal([o_num_filter], stddev=0.1, dtype='float32'), dtype="float32", name="b")
     variables_gen_filter.append(W)
     variables_gen_bias.append(b)
     return tf.add(tf.nn.conv2d(prev_layer, filter=W, strides=strides, padding=pad), b)
 
 
-def _fract_conv2d(prev_layer, strides, i_num_channel = 3, o_num_filter = 3, pad='SAME'):
-    W = tf.Variable(tf.random_uniform([3,3,o_num_filter, i_num_channel], 0.0, 1.0, dtype='float32'), dtype="float32", name="W")
-    b = tf.Variable(tf.random_uniform([o_num_filter], 0.0, 1.0, dtype='float32'), dtype="float32", name="b")
+def _fract_conv2d(prev_layer, strides, i_num_channel = 3, o_num_filter = 3, pad='SAME', filter_size=3):
+    var = np.sqrt(2.0 / (filter_size * filter_size * i_num_channel))
+    W = tf.Variable(tf.random_normal([filter_size,filter_size,o_num_filter, i_num_channel], dtype='float32', stddev=var), dtype="float32", name="W")
+    b = tf.Variable(tf.random_normal([o_num_filter], dtype='float32', stddev=0.1), dtype="float32", name="b")
     variables_gen_filter.append(W)
     variables_gen_bias.append(b)
     shape = tensorshape_to_int_array(prev_layer.get_shape())
@@ -309,14 +328,19 @@ def main():
 
     graph = load_vgg_input(batch)
 
-    content_loss = 0.01 * calc_content_loss(graph)
+    content_loss = 0.001 * calc_content_loss(graph)
     style_loss = calc_style_loss_64(graph)
-    loss = content_loss + style_loss
+    weight_loss = 10.0 * _weight_loss()
+    loss = content_loss + style_loss + weight_loss
+
+    learning_rate = 0.001;
+    var_learning_rate = tf.placeholder("float32")
 
     feed = {}
     feed[input_image] = cat_gen.reshape(1, 304, 304, 3)
     feed[content_input] = cat.reshape(1, 224, 224, 3)
     feed[style_image] = style_red.reshape(1, 224, 224,3)
+    feed[var_learning_rate] = learning_rate;
 
 
     with tf.Session() as sess:
@@ -330,7 +354,9 @@ def main():
         # 1 content
         # 2 style
 
-        optimizer = tf.train.AdamOptimizer()
+
+        #optimizer = tf.train.MomentumOptimizer(0.0001, 0.9)
+        optimizer = tf.train.AdamOptimizer(learning_rate=var_learning_rate)
         #optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.5)
         variables = variables_gen_filter + variables_gen_bias
         train_step = optimizer.minimize(loss, var_list=variables)
@@ -340,26 +366,68 @@ def main():
         init = tf.global_variables_initializer()
         sess.run(init, feed)
 
-        #load_gen_weithts(sess, path="\\checkStyleContent_4_plus_42_k")
+
+        loading_directory = "\\checkStyleContent_15_plus_43_k"
+        saving_directory = "\\checkStyleContent_20_plus_43_k"
+        starting_pic_num = 0
+
+        saver = create_saver(sess)
+        load_gen_last_checkpoint(sess, saver, path=loading_directory)
 
 
         i = 0
-        last_loss = sess.run(loss, feed_dict=feed)
-        for i in range(4000):
+        last_l = sess.run(loss, feed_dict=feed)
+        last_cl = sess.run(content_loss, feed_dict=feed)
+        last_sl = sess.run(style_loss, feed_dict=feed)
+        last_wl = sess.run(weight_loss, feed_dict=feed)
+
+        neg_loss_counter = 0
+        restore= False
+        for i in range(5000):
             print(i)
             if i % 250 == 0:
-                tmp = sess.run(loss, feed_dict=feed)
-                print(tmp)
-                print(last_loss - tmp / last_loss)
-                last_loss = tmp
+                l = sess.run(loss, feed_dict=feed)
 
-                save_image('\\output_images\\style_4_plus_43_k', '\\im' + str(i) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
-                #print(sess.run(gen_graph['conv1_1'], feed_dict=feed))
+                if (last_l -l ) < 0 and i != 0:
+                    neg_loss_counter += 1
+                    print('neg loss -> counter increase :' + str(neg_loss_counter))
+                    if neg_loss_counter >= 1 :
+                        learning_rate /= 2
+                        neg_loss_counter = 0
+                        restore = True
+                        print("new learning rate : " + str(learning_rate))
+
+                print('loss : ' + str(l))
+                print('loss_improvement : ' + str((last_l - l) / last_l))
+                last_l = l
+
+                cl = sess.run(content_loss, feed_dict=feed)
+                print('content_loss : ' + str(cl))
+                print('content_loss_improvement : ' + str((last_cl - cl) / last_cl))
+                last_cl=cl
+                sl = sess.run(style_loss, feed_dict=feed)
+                print('style_loss : ' + str(sl))
+                print('style_loss_improvement : ' + str((last_sl - sl) / last_sl))
+                last_sl=sl
+                wl = sess.run(weight_loss, feed_dict=feed)
+                print('weight_loss : ' + str(wl))
+                print('weight_loss_improvement : ' + str((last_wl - wl) / last_wl))
+                last_wl=wl
+                save_image('\\output_images' + saving_directory, '\\im' + str(i + starting_pic_num) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
+
+                if restore == False :
+                    save_gen_checkpoint(sess, saver, path=saving_directory)
+                else :
+                    print("Restoring last checkpoint")
+                    load_gen_last_checkpoint(sess, saver, path=saving_directory)
+                    restore = False
+                    print("Done")
+
             sess.run(train_step, feed_dict=feed)
 
-        save_image('\\output_images\\style_4_plus_43_k', '\\im' + str(i+1) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
+        save_image('\\output_images' + saving_directory, '\\im' + str(i + starting_pic_num + 1) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
         print(sess.run(loss, feed_dict=feed))
-        save_gen_weights(sess, path="\\checkStyleContent_4_plus_43_k")
+        save_gen_checkpoint(sess, saver, path=saving_directory)
         export_gen_weights_android(sess, variables, "\\android_exports")
 
 
