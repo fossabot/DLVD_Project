@@ -2,13 +2,13 @@ import errno
 import scipy.io
 import scipy.misc
 import tensorflow as tf
+from tensorflow.contrib.copy_graph import copy_variable_to_graph
 import skimage
 import skimage.io
 import skimage.transform
 import numpy as np
 import os
 
-from matplotlib.pyplot import imshow
 
 project_path = "C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer"
 
@@ -76,6 +76,8 @@ def load_vgg_input(batch, path = project_path + "\\model\\vgg.tfmodel"):
     print('load vgg')
     with open(path, mode='rb') as f:
         fileContent = f.read()
+
+
     graph_def = tf.GraphDef()
     graph_def.ParseFromString(fileContent)
 
@@ -136,27 +138,56 @@ def export_gen_weights_android(sess, variables, path):
         f.close()
 
 
+def export_gen_graph(sess, variables_filter, variables_bias, path, name="gen_export.pb") :
+
+    var_gen_filter_new = []
+    for i in range(len(variables_filter)):
+        var_gen_filter_new.append(sess.run(variables_filter[i]))
+
+    var_gen_bias_new = []
+    for i in range(len(variables_bias)):
+        var_gen_bias_new.append(sess.run(variables_bias[i]))
+
+    to_graph = tf.Graph()
+    with to_graph.as_default() as g:
+        graph, image, var_gen_filter, var_gen_bias = build_gen_graph_deep()
+
+        #saver = tf.train.Saver(tf.all_variables())
+        make_sure_path_exists(project_path + "\\android_exports" + path)
+        with tf.Session() as new_sess:
+            init = tf.global_variables_initializer()
+            new_sess.run(init)
+            #summary_writer = tf.train.SummaryWriter(project_path + '\\android_exports\\logs', graph_def=new_sess.graph_def)
+
+            for i in range(len(var_gen_filter)) :
+                new_sess.run(tf.assign(var_gen_filter[i], var_gen_filter_new[i]))
+            for i in range(len(var_gen_bias)):
+                new_sess.run(tf.assign(var_gen_bias[i], var_gen_bias_new[i]))
+
+            #saver.save(new_sess, project_path + "\\android_exports" + path + name)
+            tf.train.write_graph(tf.get_default_graph(), project_path + "\\android_exports" + path, name, as_text=False)
+
+
+
 def _relu(conv2d_layer):
     return tf.nn.relu(conv2d_layer)
 
-variables_gen_filter = []
-variables_gen_bias = []
 
 
-def _weight_loss():
+def _weight_loss(variables_gen_filter, variables_gen_bias):
     _w_loss = tf.reduce_sum(tf.square(variables_gen_filter[0]))
     for w in variables_gen_filter[1:]:
         _w_loss = tf.add(tf.reduce_sum(tf.square(w)), _w_loss)
 
     _b_loss = tf.reduce_sum(tf.square(variables_gen_bias[0]))
-    for b in variables_gen_filter[1:]:
+    for b in variables_gen_bias[1:]:
         _b_loss = tf.add(tf.reduce_sum(tf.square(b)), _b_loss)
 
     return tf.add(_w_loss, _b_loss)
 
 
 
-def _conv2d(prev_layer, i_num_channel = 3, o_num_filter = 3, strides=[1, 1, 1, 1], filter_size=3, pad='SAME'):
+def _conv2d(variables_gen_filter, variables_gen_bias, prev_layer, i_num_channel = 3, o_num_filter = 3, strides=[1, 1, 1, 1], filter_size=3, pad='SAME'):
     var = np.sqrt(2.0 / (filter_size * filter_size * i_num_channel))
     W = tf.Variable(tf.random_normal([filter_size, filter_size ,i_num_channel, o_num_filter], dtype='float32', stddev=var), dtype="float32", name="W")
     b = tf.Variable(tf.random_normal([o_num_filter], stddev=0.1, dtype='float32'), dtype="float32", name="b")
@@ -165,7 +196,7 @@ def _conv2d(prev_layer, i_num_channel = 3, o_num_filter = 3, strides=[1, 1, 1, 1
     return tf.add(tf.nn.conv2d(prev_layer, filter=W, strides=strides, padding=pad), b)
 
 
-def _fract_conv2d(prev_layer, strides, i_num_channel = 3, o_num_filter = 3, pad='SAME', filter_size=3):
+def _fract_conv2d(variables_gen_filter, variables_gen_bias, prev_layer, strides, i_num_channel = 3, o_num_filter = 3, pad='SAME', filter_size=3):
     var = np.sqrt(2.0 / (filter_size * filter_size * i_num_channel))
     W = tf.Variable(tf.random_normal([filter_size,filter_size,o_num_filter, i_num_channel], dtype='float32', stddev=var), dtype="float32", name="W")
     b = tf.Variable(tf.random_normal([o_num_filter], dtype='float32', stddev=0.1), dtype="float32", name="b")
@@ -175,8 +206,8 @@ def _fract_conv2d(prev_layer, strides, i_num_channel = 3, o_num_filter = 3, pad=
     return tf.add(tf.nn.conv2d_transpose(prev_layer, W, [1, 2*shape[1], 2*shape[2], o_num_filter ] , strides, padding=pad), b)
 
 
-def _conv2d_relu(prev_layer, i_num_channel = 3, o_num_filter = 3, strides=[1, 1, 1, 1], filter_size=3):
-    return _relu(_conv2d(prev_layer, i_num_channel=i_num_channel, o_num_filter=o_num_filter, strides=strides, filter_size=filter_size))
+def _conv2d_relu(variables_gen_filter, variables_gen_bias, prev_layer, i_num_channel = 3, o_num_filter = 3, strides=[1, 1, 1, 1], filter_size=3):
+    return _relu(_conv2d(variables_gen_filter, variables_gen_bias, prev_layer, i_num_channel=i_num_channel, o_num_filter=o_num_filter, strides=strides, filter_size=filter_size))
 
 
 def _instance_norm(x, epsilon=1e-9):
@@ -193,39 +224,42 @@ def _clip_2x2_border(x):
 
 
 def build_gen_graph_deep():
+
+    variables_gen_filter = []
+    variables_gen_bias = []
+
     graph = {}
     input_image = tf.placeholder('float32', [1, 304, 304, 3], name="ph_input_image")
-    #graph['var_input_image'] = _fract_pooling_downsample(input_image)
-    #print(graph['var_input_image'].get_shape())
-    graph['conv1_0'] = _relu(_instance_norm(_conv2d(input_image, filter_size=9, o_num_filter=32)))
+
+    graph['conv1_0'] = _relu(_instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, input_image, filter_size=9, o_num_filter=32)))
     print(graph['conv1_0'].get_shape())
 
-    graph['conv2_0'] = _instance_norm(_conv2d(graph['conv1_0'], strides=[1, 2, 2, 1], i_num_channel = 32, o_num_filter = 64))
+    graph['conv2_0'] = _instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv1_0'], strides=[1, 2, 2, 1], i_num_channel = 32, o_num_filter = 64))
     print(graph['conv2_0'].get_shape())
-    graph['conv2_1'] = _relu(_instance_norm(_conv2d(graph['conv2_0'], strides=[1, 2, 2, 1], i_num_channel=64, o_num_filter=128)))
+    graph['conv2_1'] = _relu(_instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv2_0'], strides=[1, 2, 2, 1], i_num_channel=64, o_num_filter=128)))
     print(graph['conv2_1'].get_shape())
 
-    graph['conv3_0_0'] = _relu(_instance_norm(_conv2d(graph['conv2_1'], i_num_channel=128, o_num_filter=128, pad='VALID')))
-    graph['conv3_0_1'] = tf.add(_clip_2x2_border(graph['conv2_1']), _instance_norm(_conv2d(graph['conv3_0_0'], i_num_channel=128, o_num_filter=128, pad='VALID')))
-    graph['conv3_1_0'] = _relu(_instance_norm(_conv2d(graph['conv3_0_1'], i_num_channel=128, o_num_filter=128, pad='VALID')))
-    graph['conv3_1_1'] = tf.add(_clip_2x2_border(graph['conv3_0_1']), _instance_norm(_conv2d(graph['conv3_1_0'], i_num_channel=128, o_num_filter=128, pad='VALID')))
-    graph['conv3_2_0'] = _relu(_instance_norm(_conv2d(graph['conv3_1_1'], i_num_channel=128, o_num_filter=128, pad='VALID')))
-    graph['conv3_2_1'] = tf.add(_clip_2x2_border(graph['conv3_1_1']), _instance_norm(_conv2d(graph['conv3_2_0'], i_num_channel=128, o_num_filter=128, pad='VALID')))
-    graph['conv3_3_0'] = _relu(_instance_norm(_conv2d(graph['conv3_2_1'], i_num_channel=128, o_num_filter=128, pad='VALID')))
-    graph['conv3_3_1'] = tf.add(_clip_2x2_border(graph['conv3_2_1']), _instance_norm(_conv2d(graph['conv3_3_0'], i_num_channel=128, o_num_filter=128, pad='VALID')))
-    graph['conv3_4_0'] = _relu(_instance_norm(_conv2d(graph['conv3_3_1'], i_num_channel=128, o_num_filter=128, pad='VALID')))
-    graph['conv3_4_1'] = tf.add(_clip_2x2_border(graph['conv3_3_1']), _instance_norm(_conv2d(graph['conv3_4_0'], i_num_channel=128, o_num_filter=128, pad='VALID')))
+    graph['conv3_0_0'] = _relu(_instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv2_1'], i_num_channel=128, o_num_filter=128, pad='VALID')))
+    graph['conv3_0_1'] = tf.add(_clip_2x2_border(graph['conv2_1']), _instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv3_0_0'], i_num_channel=128, o_num_filter=128, pad='VALID')))
+    graph['conv3_1_0'] = _relu(_instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv3_0_1'], i_num_channel=128, o_num_filter=128, pad='VALID')))
+    graph['conv3_1_1'] = tf.add(_clip_2x2_border(graph['conv3_0_1']), _instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv3_1_0'], i_num_channel=128, o_num_filter=128, pad='VALID')))
+    graph['conv3_2_0'] = _relu(_instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv3_1_1'], i_num_channel=128, o_num_filter=128, pad='VALID')))
+    graph['conv3_2_1'] = tf.add(_clip_2x2_border(graph['conv3_1_1']), _instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv3_2_0'], i_num_channel=128, o_num_filter=128, pad='VALID')))
+    graph['conv3_3_0'] = _relu(_instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv3_2_1'], i_num_channel=128, o_num_filter=128, pad='VALID')))
+    graph['conv3_3_1'] = tf.add(_clip_2x2_border(graph['conv3_2_1']), _instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv3_3_0'], i_num_channel=128, o_num_filter=128, pad='VALID')))
+    graph['conv3_4_0'] = _relu(_instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv3_3_1'], i_num_channel=128, o_num_filter=128, pad='VALID')))
+    graph['conv3_4_1'] = tf.add(_clip_2x2_border(graph['conv3_3_1']), _instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv3_4_0'], i_num_channel=128, o_num_filter=128, pad='VALID')))
     print(graph['conv3_4_1'].get_shape())
 
-    graph['conv4_0'] = _instance_norm(_fract_conv2d(graph['conv3_4_1'], [1, 2, 2, 1], i_num_channel=128, o_num_filter=64))
+    graph['conv4_0'] = _instance_norm(_fract_conv2d(variables_gen_filter, variables_gen_bias, graph['conv3_4_1'], [1, 2, 2, 1], i_num_channel=128, o_num_filter=64))
     print(graph['conv4_0'].get_shape())
-    graph['conv4_1'] = _relu(_instance_norm(_fract_conv2d(graph['conv4_0'], [1, 2, 2, 1], i_num_channel=64, o_num_filter=32)))
+    graph['conv4_1'] = _relu(_instance_norm(_fract_conv2d(variables_gen_filter, variables_gen_bias, graph['conv4_0'], [1, 2, 2, 1], i_num_channel=64, o_num_filter=32)))
     print(graph['conv4_1'].get_shape())
 
-    graph['conv5_0'] = _relu(_instance_norm(_conv2d(graph['conv4_1'], i_num_channel=32, o_num_filter=3, filter_size=9)))
+    graph['conv5_0'] = _relu(_instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv4_1'], i_num_channel=32, o_num_filter=3, filter_size=9)))
 
     graph['output'] = tf.tanh(graph['conv5_0'], 'output')
-    return graph, input_image
+    return graph, input_image, variables_gen_filter, variables_gen_bias
 
 
 def calc_gram(single_picture_tensor_conv):
@@ -315,7 +349,8 @@ def main():
     tuebingen_neckarfront, avg_tuebingen_neckarfront = load_image(project_path + "\\images\\tuebingen_neckarfront.jpg", between_01=True, substract_mean=False)
     tuebingen_neckarfront_gen, avg_tuebingen_neckarfront_gen = load_image(project_path + "\\images\\tuebingen_neckarfront.jpg", between_01=True, substract_mean=False, output_size=304)
 
-    gen_graph, input_image = build_gen_graph_deep()
+
+    gen_graph, input_image, variables_gen_filter, variables_gen_bias = build_gen_graph_deep()
     gen_image = gen_graph['output']
 
     style_image = tf.placeholder('float32', [1, 224, 224,3], name="style_image")
@@ -330,7 +365,7 @@ def main():
 
     content_loss = 0.001 * calc_content_loss(graph)
     style_loss = calc_style_loss_64(graph)
-    weight_loss = 10.0 * _weight_loss()
+    weight_loss = 10.0 * _weight_loss(variables_gen_filter, variables_gen_bias)
     loss = content_loss + style_loss + weight_loss
 
     learning_rate = 0.001;
@@ -342,6 +377,7 @@ def main():
     feed[style_image] = style_red.reshape(1, 224, 224,3)
     feed[var_learning_rate] = learning_rate;
 
+    graph.as_default()
 
     with tf.Session() as sess:
 
@@ -383,7 +419,7 @@ def main():
 
         neg_loss_counter = 0
         restore= False
-        for i in range(5000):
+        for i in range(2):
             print(i)
             if i % 250 == 0:
                 l = sess.run(loss, feed_dict=feed)
@@ -428,7 +464,7 @@ def main():
         save_image('\\output_images' + saving_directory, '\\im' + str(i + starting_pic_num + 1) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
         print(sess.run(loss, feed_dict=feed))
         save_gen_checkpoint(sess, saver, path=saving_directory)
-        export_gen_weights_android(sess, variables, "\\android_exports")
+        #export_gen_graph(sess, variables_gen_filter, variables_gen_bias, saving_directory)
 
 
 def transform(image, path_to_generator, meta_filename, save_to_directory, filename):

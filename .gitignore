@@ -178,7 +178,6 @@ Temporary Items
 *.tfmodel
 StyleTransfer/logs/
 StyleTransfer/tmp
-StyleTransfer/android_export
 StyleTransferAppTensorflow/app/src/main/assets/
 
 
