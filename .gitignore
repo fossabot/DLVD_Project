@@ -177,8 +177,7 @@ Temporary Items
 #Local Data
 *.tfmodel
 StyleTransfer/logs/
-StyleTransfer/tmp
-StyleTransfer/android_exports/logs
+StyleTransfer/data
 StyleTransferAppTensorflow/app/src/main/assets/
 
 

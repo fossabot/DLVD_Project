@@ -12,7 +12,16 @@ import os
 
 project_path = "C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer"
 
-synset = [l.strip() for l in open(project_path + "\\model\\synset.txt").readlines()]
+model_path = "\\data\\model"
+checkpoints_path = "\\data\\checkpoints"
+images_path = "\\data\\images"
+
+log_train = "\\logs\\training_network"
+log_generator = "\\logs\\generator_network"
+
+
+output_generator = "\\outputs\\generator_networks"
+output_images = "\\outputs\\images"
 
 def make_sure_path_exists(path):
     try:
@@ -26,7 +35,7 @@ def make_sure_path_exists(path):
 # [height, width, depth]
 def load_image(path, between_01=False, substract_mean=False, output_size=224):
     # load image
-    img = skimage.io.imread(path)
+    img = skimage.io.imread(project_path + images_path + path)
     #img = img / 255.0
     #assert (0 <= img).all() and (img <= 1.0).all()
     # print "Original Image Shape: ", img.shape
@@ -48,17 +57,31 @@ def load_image(path, between_01=False, substract_mean=False, output_size=224):
     return resized_img, avg
 
 
-def save_image(path, name, image, to255=False, avg=0):
+def save_image(path, name, images, to255=False, avg=0):
     # Output should add back the mean.
     #image = image + MEAN_VALUES
     # Get rid of the first useless dimension, what remains is the image.
-    image = image[0] + avg
-    if to255 == True :
-        image = image * 255.0
-    image = np.clip(image, 0, 255).astype('uint8')
-    make_sure_path_exists(project_path + path)
-    scipy.misc.imsave(project_path + path + name, image)
+    for i in range(len(images)):
+        image = images[i] + avg
+        if to255 == True :
+            image = image * 255.0
+        image = np.clip(image, 0, 255).astype('uint8')
+        make_sure_path_exists(project_path + path)
+        scipy.misc.imsave(project_path + path + name + '_' + str(i) + '.jpg', image)
 
+
+def load_pictures_for_feed(directory_path):
+    images = []
+    content_images = []
+    for file in os.listdir(project_path + images_path + directory_path):
+        full_path = os.path.join(project_path + images_path + directory_path, file)
+        if os.path.isfile(full_path) and str(file)[-4:] == '.jpg' :
+            img, avg_img = load_image(directory_path + '\\' + str(file), between_01=True, output_size=304)
+            images.append(img)
+            img, avg_img = load_image(directory_path + '\\' + str(file), between_01=True)
+            content_images.append(img)
+
+    return images, content_images
 
 def tensorshape_to_int_array(ts):
     s = []
@@ -72,7 +95,7 @@ def tensorshape_to_int_array(ts):
         s.append(int(x))
     return s
 
-def load_vgg_input(batch, path = project_path + "\\model\\vgg.tfmodel"):
+def load_vgg_input(batch, path = project_path + model_path + "\\vgg.tfmodel"):
     print('load vgg')
     with open(path, mode='rb') as f:
         fileContent = f.read()
@@ -107,7 +130,7 @@ def create_saver(sess) :
 
 def load_gen_last_checkpoint(sess, saver,  path=""):
     print("load last checkpoint")
-    c_path = project_path + "\\tmp" + path
+    c_path = project_path + checkpoints_path + path
     print(c_path)
     saver.restore(sess, tf.train.latest_checkpoint(c_path))
     print("DONE")
@@ -115,8 +138,8 @@ def load_gen_last_checkpoint(sess, saver,  path=""):
 
 def save_gen_checkpoint(sess, saver, path="", name="\\checkpoint.data"):
     print('save checkpoint')
-    make_sure_path_exists(project_path + "\\tmp" + path)
-    saver.save(sess, project_path + "\\tmp" + path + name)
+    make_sure_path_exists(project_path + checkpoints_path + path)
+    saver.save(sess, project_path + checkpoints_path + path + name)
     print('Done')
 
 
@@ -152,14 +175,14 @@ def export_gen_graph(sess, variables_filter, variables_bias, path, name="gen_exp
         build_gen_graph_deep(trainable=False, variables_gen_filter=var_gen_filter_new, variables_gen_bias=var_gen_bias_new)
 
         #saver = tf.train.Saver(tf.all_variables())
-        make_sure_path_exists(project_path + "\\android_exports" + path)
+        make_sure_path_exists(project_path + output_generator + path)
         with tf.Session() as new_sess:
             init = tf.global_variables_initializer()
             new_sess.run(init)
-            summary_writer = tf.train.SummaryWriter(project_path + '\\android_exports\\logs', graph_def=new_sess.graph_def)
+            summary_writer = tf.train.SummaryWriter(project_path + log_generator, graph_def=new_sess.graph_def)
 
             #saver.save(new_sess, project_path + "\\android_exports" + path + name)
-            tf.train.write_graph(tf.get_default_graph(), project_path + "\\android_exports" + path, name, as_text=False)
+            tf.train.write_graph(tf.get_default_graph(), project_path + output_generator + path, name, as_text=False)
 
 
 
@@ -205,7 +228,7 @@ def _fract_conv2d(variables_gen_filter, variables_gen_bias, prev_layer, strides,
         W = tf.constant(variables_gen_filter.pop(0), dtype="float32", name="W")
         b = tf.constant(variables_gen_bias.pop(0), dtype="float32", name="b")
     shape = tensorshape_to_int_array(prev_layer.get_shape())
-    return tf.add(tf.nn.conv2d_transpose(prev_layer, W, [1, 2*shape[1], 2*shape[2], o_num_filter ] , strides, padding=pad), b)
+    return tf.add(tf.nn.conv2d_transpose(prev_layer, W, [shape[0], 2*shape[1], 2*shape[2], o_num_filter ] , strides, padding=pad), b)
 
 
 
@@ -222,14 +245,14 @@ def _clip_2x2_border(x):
     return tmp
 
 
-def build_gen_graph_deep(trainable = True, variables_gen_filter = [], variables_gen_bias = []):
+def build_gen_graph_deep(trainable = True, variables_gen_filter = [], variables_gen_bias = [], input_pictures = 1):
 
     if trainable :
         variables_gen_filter = []
         variables_gen_bias = []
 
     graph = {}
-    input_image = tf.placeholder('float32', [1, 304, 304, 3], name="ph_input_image")
+    input_image = tf.placeholder('float32', [input_pictures, 304, 304, 3], name="ph_input_image")
 
     graph['conv1_0'] = _relu(_instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, input_image, filter_size=9, o_num_filter=32, is_trainable = trainable)))
     print(graph['conv1_0'].get_shape())
@@ -272,7 +295,10 @@ def calc_gram(single_picture_tensor_conv):
 
 def calc_content_loss(graph, layer = "import/conv3_3/Relu:0"):
     tensor_conv = graph.get_tensor_by_name(layer)
-    content_l= tf.reduce_sum(tf.square(tensor_conv[0] - tensor_conv[1]), name='content_loss')
+    amount_pictures = int((tensorshape_to_int_array(tensor_conv.get_shape())[0] - 1) / 2)
+    content_l = 0.0
+    for i in range(amount_pictures) :
+        content_l += tf.reduce_sum(tf.square(tensor_conv[i] - tensor_conv[i + amount_pictures]), name='content_loss')
     return content_l
 
 
@@ -288,108 +314,97 @@ def calc_style_loss_64(graph):
     tensor_conv4_1 = graph.get_tensor_by_name("import/conv4_2/Relu:0")
     #tensor_conv5_1 = graph.get_tensor_by_name("import/conv5_2/Relu:0")
 
-    tensor_gen_gram1_1 = calc_gram(tensor_conv1_1[0])
-    tensor_gen_gram2_1 = calc_gram(tensor_conv2_1[0])
-    tensor_gen_gram3_1 = calc_gram(tensor_conv3_1[0])
-    tensor_gen_gram4_1 = calc_gram(tensor_conv4_1[0])
-    #tensor_gen_gram5_1 = calc_gram(tensor_conv5_1[0])
+    dim_zero_elem = tensorshape_to_int_array(tensor_conv1_1.get_shape())[0]
+    amount_pictures = int((dim_zero_elem - 1) / 2)
 
-    tensor_style_gram1_1 = calc_gram(tensor_conv1_1[2])
-    tensor_style_gram2_1 = calc_gram(tensor_conv2_1[2])
-    tensor_style_gram3_1 = calc_gram(tensor_conv3_1[2])
-    tensor_style_gram4_1 = calc_gram(tensor_conv4_1[2])
-    #tensor_style_gram5_1 = calc_gram(tensor_conv5_1[2])
+    style_l = 0.0
+    for i in range(amount_pictures):
 
-    s = tensorshape_to_int_array(tensor_conv1_1.get_shape())
-    style_loss1_1_nominator = tf.reduce_sum(
-        tf.pow(tensor_gen_gram1_1 - tensor_style_gram1_1, 2.0))
-    style_loss1_1_denominator = 4.0 * ((s[1] * s[2]) ** 2) * (s[3] ** 2.0)
-    style_loss1_1 = tf.div(style_loss1_1_nominator, style_loss1_1_denominator)
+        tensor_gen_gram1_1 = calc_gram(tensor_conv1_1[i])
+        tensor_gen_gram2_1 = calc_gram(tensor_conv2_1[i])
+        tensor_gen_gram3_1 = calc_gram(tensor_conv3_1[i])
+        tensor_gen_gram4_1 = calc_gram(tensor_conv4_1[i])
+        #tensor_gen_gram5_1 = calc_gram(tensor_conv5_1[0])
 
-    s = tensorshape_to_int_array(tensor_conv2_1.get_shape())
-    style_loss2_1_nominator = tf.reduce_sum(
-        tf.pow(tensor_gen_gram2_1 - tensor_style_gram2_1, 2.0))
-    style_loss2_1_denominator = 4.0 * ((s[1] * s[2]) ** 2) * (s[3] ** 2.0)
-    style_loss2_1 = tf.div(style_loss2_1_nominator, style_loss2_1_denominator)
+        tensor_style_gram1_1 = calc_gram(tensor_conv1_1[dim_zero_elem - 1])
+        tensor_style_gram2_1 = calc_gram(tensor_conv2_1[dim_zero_elem - 1])
+        tensor_style_gram3_1 = calc_gram(tensor_conv3_1[dim_zero_elem - 1])
+        tensor_style_gram4_1 = calc_gram(tensor_conv4_1[dim_zero_elem - 1])
+        #tensor_style_gram5_1 = calc_gram(tensor_conv5_1[2])
 
-    s = tensorshape_to_int_array(tensor_conv3_1.get_shape())
-    style_loss3_1_nominator = tf.reduce_sum(
-        tf.pow(tensor_gen_gram3_1 - tensor_style_gram3_1, 2.0))
-    style_loss3_1_denominator = 4.0 * ((s[1] * s[2]) ** 2) * (s[3] ** 2.0)
-    style_loss3_1 = tf.div(style_loss3_1_nominator, style_loss3_1_denominator)
+        s = tensorshape_to_int_array(tensor_conv1_1.get_shape())
+        style_loss1_1_nominator = tf.reduce_sum(
+            tf.pow(tensor_gen_gram1_1 - tensor_style_gram1_1, 2.0))
+        style_loss1_1_denominator = 4.0 * ((s[1] * s[2]) ** 2) * (s[3] ** 2.0)
+        style_loss1_1 = tf.div(style_loss1_1_nominator, style_loss1_1_denominator)
 
-    s = tensorshape_to_int_array(tensor_conv4_1.get_shape())
-    style_loss4_1_nominator = tf.reduce_sum(
-        tf.pow(tensor_gen_gram4_1 - tensor_style_gram4_1, 2.0))
-    style_loss4_1_denominator = 4.0 * ((s[1] * s[2]) ** 2) * (s[3] ** 2.0)
-    style_loss4_1 = tf.div(style_loss4_1_nominator, style_loss4_1_denominator)
+        s = tensorshape_to_int_array(tensor_conv2_1.get_shape())
+        style_loss2_1_nominator = tf.reduce_sum(
+            tf.pow(tensor_gen_gram2_1 - tensor_style_gram2_1, 2.0))
+        style_loss2_1_denominator = 4.0 * ((s[1] * s[2]) ** 2) * (s[3] ** 2.0)
+        style_loss2_1 = tf.div(style_loss2_1_nominator, style_loss2_1_denominator)
 
-    #s = tensorshape_to_int_array(tensor_conv5_1.get_shape())
-    #style_loss5_1_nominator = tf.reduce_sum(
-    #    tf.pow(tf.cast(tensor_gen_gram5_1, tf.float64) - tf.cast(tensor_style_gram5_1, tf.float64), 2))
-    #style_loss5_1_denominator = tf.cast(4.0 * (s[1] * s[2]) ** 2 * s[3] ** 2.0, tf.float64)
-    #style_loss5_1 = tf.div(style_loss5_1_nominator, style_loss5_1_denominator)
+        s = tensorshape_to_int_array(tensor_conv3_1.get_shape())
+        style_loss3_1_nominator = tf.reduce_sum(
+            tf.pow(tensor_gen_gram3_1 - tensor_style_gram3_1, 2.0))
+        style_loss3_1_denominator = 4.0 * ((s[1] * s[2]) ** 2) * (s[3] ** 2.0)
+        style_loss3_1 = tf.div(style_loss3_1_nominator, style_loss3_1_denominator)
 
-    style_l = style_loss1_1 + style_loss2_1 + style_loss3_1 + style_loss4_1
+        s = tensorshape_to_int_array(tensor_conv4_1.get_shape())
+        style_loss4_1_nominator = tf.reduce_sum(
+            tf.pow(tensor_gen_gram4_1 - tensor_style_gram4_1, 2.0))
+        style_loss4_1_denominator = 4.0 * ((s[1] * s[2]) ** 2) * (s[3] ** 2.0)
+        style_loss4_1 = tf.div(style_loss4_1_nominator, style_loss4_1_denominator)
+
+        #s = tensorshape_to_int_array(tensor_conv5_1.get_shape())
+        #style_loss5_1_nominator = tf.reduce_sum(
+        #    tf.pow(tf.cast(tensor_gen_gram5_1, tf.float64) - tf.cast(tensor_style_gram5_1, tf.float64), 2))
+        #style_loss5_1_denominator = tf.cast(4.0 * (s[1] * s[2]) ** 2 * s[3] ** 2.0, tf.float64)
+        #style_loss5_1 = tf.div(style_loss5_1_nominator, style_loss5_1_denominator)
+
+        style_l += style_loss1_1 + style_loss2_1 + style_loss3_1 + style_loss4_1
     return style_l
 
 
-# 0 generiert
-# 1 content
-# 2 style
-
 def main():
 
-    cat, avg_cat = load_image(project_path + "\\images\\cat.jpg", between_01=True, substract_mean=False)
-    cat_gen, avg_cat_gen = load_image(project_path + "\\images\\cat.jpg", between_01=True, substract_mean=False, output_size=304)
+    input_images, content_input_images = load_pictures_for_feed("\\batch")
+    input_images_len = len(input_images)
 
-    elch, avg_elch = load_image(project_path + "\\images\\elch.jpg", between_01=True, substract_mean=False)
-
-    style_red, avg_style_red = load_image(project_path + "\\images\\style.jpg", between_01=True, substract_mean=False)
-    style_blue, avg_style_blue = load_image(project_path + "\\images\\style2.jpg", between_01=True, substract_mean=False)
-    tuebingen_neckarfront, avg_tuebingen_neckarfront = load_image(project_path + "\\images\\tuebingen_neckarfront.jpg", between_01=True, substract_mean=False)
-    tuebingen_neckarfront_gen, avg_tuebingen_neckarfront_gen = load_image(project_path + "\\images\\tuebingen_neckarfront.jpg", between_01=True, substract_mean=False, output_size=304)
+    style_red, avg_style_red = load_image("\\styles\\style.jpg", between_01=True, substract_mean=False)
+    #style_blue, avg_style_blue = load_image("\\styles\\style2.jpg", between_01=True, substract_mean=False)
 
 
-    gen_graph, input_image, variables_gen_filter, variables_gen_bias = build_gen_graph_deep()
+    gen_graph, input_image, variables_gen_filter, variables_gen_bias = build_gen_graph_deep(input_pictures=input_images_len)
     gen_image = gen_graph['output']
 
     style_image = tf.placeholder('float32', [1, 224, 224,3], name="style_image")
-    content_input = tf.placeholder('float32', [1, 224, 224,3], name="content_image")
+    content_input = tf.placeholder('float32', [input_images_len, 224, 224,3], name="content_image")
 
     batch = gen_image
     batch = tf.concat(0, [batch, content_input])
     batch = tf.concat(0, [batch, style_image])
-    assert batch.get_shape() == (3, 224, 224, 3)
 
     graph = load_vgg_input(batch)
 
     content_loss = 0.001 * calc_content_loss(graph)
     style_loss = calc_style_loss_64(graph)
-    weight_loss = 10.0 * _weight_loss(variables_gen_filter, variables_gen_bias)
-    loss = content_loss + style_loss + weight_loss
+    loss = content_loss + style_loss
 
     learning_rate = 0.001;
     var_learning_rate = tf.placeholder("float32")
 
     feed = {}
-    feed[input_image] = cat_gen.reshape(1, 304, 304, 3)
-    feed[content_input] = cat.reshape(1, 224, 224, 3)
+    feed[input_image] = input_images
+    feed[content_input] = content_input_images
     feed[style_image] = style_red.reshape(1, 224, 224,3)
     feed[var_learning_rate] = learning_rate;
-
-    graph.as_default()
 
     with tf.Session() as sess:
 
         # set log directory
-        summary_writer = tf.train.SummaryWriter(
-            project_path + '\\logs',
-            graph_def=sess.graph_def)
+        summary_writer = tf.train.SummaryWriter(project_path + log_train,graph_def=sess.graph_def)
 
-        # 0 generiert
-        # 1 content
-        # 2 style
 
 
         #optimizer = tf.train.MomentumOptimizer(0.0001, 0.9)
@@ -398,41 +413,51 @@ def main():
         variables = variables_gen_filter + variables_gen_bias
         train_step = optimizer.minimize(loss, var_list=variables)
 
-        print(len(tf.trainable_variables()));
+        print('number of variables : ' + str(len(tf.trainable_variables())));
 
         init = tf.global_variables_initializer()
         sess.run(init, feed)
 
 
-        loading_directory = "\\checkStyleContent_15_plus_43_k"
-        saving_directory = "\\checkStyleContent_20_plus_43_k"
+        loading_directory = "\\version_44_k"
+        saving_directory = "\\version_44_k"
         starting_pic_num = 0
 
         saver = create_saver(sess)
-        load_gen_last_checkpoint(sess, saver, path=loading_directory)
+        #load_gen_last_checkpoint(sess, saver, path=loading_directory)
 
 
         i = 0
         last_l = sess.run(loss, feed_dict=feed)
         last_cl = sess.run(content_loss, feed_dict=feed)
         last_sl = sess.run(style_loss, feed_dict=feed)
-        last_wl = sess.run(weight_loss, feed_dict=feed)
+        #last_wl = sess.run(weight_loss, feed_dict=feed)
 
         neg_loss_counter = 0
+        pos_loss_counter = 0
         restore= False
-        for i in range(2):
-            print(i)
+        for i in range(4000):
+            if(i % 10 == 0) :
+                print(i)
+
             if i % 250 == 0:
                 l = sess.run(loss, feed_dict=feed)
 
+                print('learning rate : ' + str(learning_rate))
                 if (last_l -l ) < 0 and i != 0:
                     neg_loss_counter += 1
                     print('neg loss -> counter increase :' + str(neg_loss_counter))
-                    if neg_loss_counter >= 1 :
-                        learning_rate /= 2
+                    if neg_loss_counter == 2 :
+                        learning_rate /= 2.0
                         neg_loss_counter = 0
                         restore = True
                         print("new learning rate : " + str(learning_rate))
+                else :
+                    pos_loss_counter += 1
+                    if pos_loss_counter == 2 :
+                        neg_loss_counter = 0
+                        pos_loss_counter = 0
+                        print('neg loss -> reset counter to 0')
 
                 print('loss : ' + str(l))
                 print('loss_improvement : ' + str((last_l - l) / last_l))
@@ -446,11 +471,11 @@ def main():
                 print('style_loss : ' + str(sl))
                 print('style_loss_improvement : ' + str((last_sl - sl) / last_sl))
                 last_sl=sl
-                wl = sess.run(weight_loss, feed_dict=feed)
-                print('weight_loss : ' + str(wl))
-                print('weight_loss_improvement : ' + str((last_wl - wl) / last_wl))
-                last_wl=wl
-                save_image('\\output_images' + saving_directory, '\\im' + str(i + starting_pic_num) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
+                #wl = sess.run(weight_loss, feed_dict=feed)
+                #print('weight_loss : ' + str(wl))
+                #print('weight_loss_improvement : ' + str((last_wl - wl) / last_wl))
+                #last_wl=wl
+                save_image(output_images + saving_directory, '\\im' + str(i + starting_pic_num), sess.run(gen_image, feed_dict=feed), to255=True)
 
                 if restore == False :
                     save_gen_checkpoint(sess, saver, path=saving_directory)
@@ -462,31 +487,19 @@ def main():
 
             sess.run(train_step, feed_dict=feed)
 
-        save_image('\\output_images' + saving_directory, '\\im' + str(i + starting_pic_num + 1) + '.jpg', sess.run(gen_image, feed_dict=feed), to255=True, avg=avg_tuebingen_neckarfront)
+        save_image(output_images + saving_directory, '\\im' + str(i + starting_pic_num + 1), sess.run(gen_image, feed_dict=feed), to255=True)
         print(sess.run(loss, feed_dict=feed))
         save_gen_checkpoint(sess, saver, path=saving_directory)
         export_gen_graph(sess, variables_gen_filter, variables_gen_bias, saving_directory)
 
 
-def transform(image, path_to_generator, meta_filename, save_to_directory, filename):
-    graph = load_gen_graph(path_to_generator, meta_filename)
-    feed = {'ph_input_image:0' : image}
-
-    with tf.Session() as sess:
-        init = tf.global_variables_initializer()
-        sess.run(init, feed_dict=feed)
-        x = sess.run(graph.get_tensor_by_name('output:0'), feed_dict=feed)
-        make_sure_path_exists(project_path + '\\output_images' + save_to_directory)
-        save_image('\\output_images' + save_to_directory, filename, x, True)
-
-
 def test_android_gen():
-    full_path = project_path + '\\android_exports\\checkStyleContent_20_plus_43_k'
+    full_path = output_generator + '\\checkStyleContent_20_plus_43_k'
 
-    cat_gen, avg_cat_gen = load_image(project_path + "\\images\\cat.jpg", between_01=True, substract_mean=False, output_size=304)
+    cat_gen, avg_cat_gen = load_image("\\cat.jpg", between_01=True, substract_mean=False, output_size=304)
 
     print('load generator')
-    with open(full_path + '\\gen_export.pb', mode='rb') as f:
+    with open(project_path + full_path + '\\gen_export.pb', mode='rb') as f:
         fileContent = f.read()
 
     graph_def = tf.GraphDef()
@@ -497,9 +510,6 @@ def test_android_gen():
     # print("graph loaded from disk")
     print('Done')
 
-    tmp = [tensor.name for tensor in tf.get_default_graph().as_graph_def().node]
-    print(tmp)
-
     output = tf.get_default_graph().get_tensor_by_name('import/output:0')
 
     feed = {}
@@ -509,7 +519,7 @@ def test_android_gen():
         init = tf.global_variables_initializer()
         sess.run(init)
         x = sess.run(output, feed_dict=feed)
-        save_image('\\android_exports\\checkStyleContent_20_plus_43_k', '\\test.jpg', x, True)
+        save_image(full_path, '\\test', x, True)
 
 
 main()
