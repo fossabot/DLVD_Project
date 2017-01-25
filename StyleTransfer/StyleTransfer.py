@@ -66,8 +66,11 @@ def save_image(path, name, images, to255=False, avg=0):
         if to255 == True :
             image = image * 255.0
         image = np.clip(image, 0, 255).astype('uint8')
-        make_sure_path_exists(project_path + path)
-        scipy.misc.imsave(project_path + path + name + '_' + str(i) + '.jpg', image)
+        full_path = project_path + output_images + path
+        if len(images) != 1:
+            full_path = project_path + output_images + path + '\\' + str(i)
+        make_sure_path_exists(full_path)
+        scipy.misc.imsave(full_path + name + '_' + str(i) + '.jpg', image)
 
 
 def load_pictures_for_feed(directory_path):
@@ -293,7 +296,7 @@ def calc_gram(single_picture_tensor_conv):
     return tf.matmul(tf.transpose(tensor_conv_reshape), tensor_conv_reshape)
 
 
-def calc_content_loss(graph, layer = "import/conv3_3/Relu:0"):
+def calc_content_loss(graph, layer = "import/conv1_2/Relu:0"):
     tensor_conv = graph.get_tensor_by_name(layer)
     amount_pictures = int((tensorshape_to_int_array(tensor_conv.get_shape())[0] - 1) / 2)
     content_l = 0.0
@@ -421,10 +424,10 @@ def main():
 
         loading_directory = "\\version_44_k"
         saving_directory = "\\version_44_k"
-        starting_pic_num = 0
+        starting_pic_num = 3500
 
         saver = create_saver(sess)
-        #load_gen_last_checkpoint(sess, saver, path=loading_directory)
+        load_gen_last_checkpoint(sess, saver, path=loading_directory)
 
 
         i = 0
@@ -436,7 +439,7 @@ def main():
         neg_loss_counter = 0
         pos_loss_counter = 0
         restore= False
-        for i in range(4000):
+        for i in range(500):
             if(i % 10 == 0) :
                 print(i)
 
@@ -475,7 +478,7 @@ def main():
                 #print('weight_loss : ' + str(wl))
                 #print('weight_loss_improvement : ' + str((last_wl - wl) / last_wl))
                 #last_wl=wl
-                save_image(output_images + saving_directory, '\\im' + str(i + starting_pic_num), sess.run(gen_image, feed_dict=feed), to255=True)
+                save_image(saving_directory, '\\im' + str(i + starting_pic_num), sess.run(gen_image, feed_dict=feed), to255=True)
 
                 if restore == False :
                     save_gen_checkpoint(sess, saver, path=saving_directory)
@@ -487,7 +490,7 @@ def main():
 
             sess.run(train_step, feed_dict=feed)
 
-        save_image(output_images + saving_directory, '\\im' + str(i + starting_pic_num + 1), sess.run(gen_image, feed_dict=feed), to255=True)
+        save_image(saving_directory, '\\im' + str(i + starting_pic_num + 1), sess.run(gen_image, feed_dict=feed), to255=True)
         print(sess.run(loss, feed_dict=feed))
         save_gen_checkpoint(sess, saver, path=saving_directory)
         export_gen_graph(sess, variables_gen_filter, variables_gen_bias, saving_directory)
@@ -519,7 +522,7 @@ def test_android_gen():
         init = tf.global_variables_initializer()
         sess.run(init)
         x = sess.run(output, feed_dict=feed)
-        save_image(full_path, '\\test', x, True)
+        save_image('\\generator_load', '\\test', x, True)
 
 
 main()
