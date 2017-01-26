@@ -1,101 +1,146 @@
 package com.example.etienne.styletransferapptensorflow;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.Color;
+
+import android.content.pm.PackageManager;
+import android.graphics.*;
+import android.net.Uri;
+import android.os.*;
 import android.provider.MediaStore;
+
+
+import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
+import android.support.v7.widget.DefaultItemAnimator;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
-import org.tensorflow.contrib.android.TensorFlowInferenceInterface;
+import android.widget.Toast;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity {
-    Button button;
-    Bitmap photo;
-    ImageView imageView;
+    private Button button;
+    private Bitmap result;
+    private ImageView imageView;
+    private RecyclerView recyclerView;
+    private ArrayList<ListItem> items;
+    private int lastSelection = -1;
+    private Model currentModel = null;
+
+    File myFilesDir;
+
     private static final int CAMERA_REQUEST = 1888;
 
+    private static final int REQUEST_CAMERA_PERMISSION = 200;
 
-    private static final String MODEL_FILE = "file:///android_asset/gen_export.pb";
-    private static final String INPUT_NODE = "ph_input_image";
-    private static final String OUTPUT_NODE = "output";
-    private static final int DESIRED_HEIGHT = 224;
-    private static final int DESIRED_WIDTH = 224;
-
-    TensorFlowInferenceInterface inferenceInterface;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        inferenceInterface = new TensorFlowInferenceInterface();
-        inferenceInterface.initializeTensorFlow(getAssets(),MODEL_FILE);
 
-
+        LinearLayoutManager layoutManager= new LinearLayoutManager(this,LinearLayoutManager.HORIZONTAL, false);
+        recyclerView = (RecyclerView) findViewById(R.id.listView);
+        recyclerView.setLayoutManager(layoutManager);
         imageView = (ImageView) this.findViewById(R.id.imageView);
+
+        myFilesDir = new File(Environment.getExternalStorageDirectory().getAbsolutePath() + "/Fotos");
+        myFilesDir.mkdirs();
+
+
+        items = new ArrayList<>();
+        fetchData();
+
+        StyleAdapter adapter = new StyleAdapter(items);
+        recyclerView.setItemAnimator(new DefaultItemAnimator());
+        recyclerView.addItemDecoration(new DividerItemDecoration(this,LinearLayoutManager.HORIZONTAL));
+        recyclerView.setAdapter(adapter);
+        recyclerView.addOnItemTouchListener(new StyleTouchListener(getApplicationContext(), new StyleTouchListener.OnItemClickListener() {
+            @Override
+            public void onItemClick(View view, int position) {
+                if(lastSelection == -1){
+                    lastSelection = position;
+                    items.get(position).activateStyle();
+                    currentModel = items.get(position).getModel();
+                }else{
+                    items.get(lastSelection).disableStyle();
+                    lastSelection = position;
+                    items.get(position).activateStyle();
+                    currentModel = items.get(position).getModel();
+                }
+
+                Toast.makeText(MainActivity.this, "Currently selected style "+ items.get(position).getStyleName() , Toast.LENGTH_SHORT).show();
+            }
+        }));
 
         button = (Button) this.findViewById(R.id.photoButton);
         button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Intent cameraIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-                startActivityForResult(cameraIntent,CAMERA_REQUEST);
+                    Intent cameraIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                    cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, Uri.fromFile(new File(myFilesDir.toString() + "/temp.jpg")));
+                    startActivityForResult(cameraIntent, CAMERA_REQUEST);
+
             }
         });
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQUEST_CAMERA_PERMISSION);
+            return;
+        }
+    }
+
+    private void fetchData() {
+        try {
+            String[] names = getAssets().list("");
+            for(String name : names){
+                if(name.contains(".pb")){
+                    Model model = new Model(name,getAssets());
+                    String pureName = name.substring(0,name.indexOf("."));
+                    Log.d("purename",pureName);
+                    int id = getResources().getIdentifier(pureName,"drawable",getPackageName());
+                    Bitmap bmp = BitmapFactory.decodeResource(getResources(),id);
+                    ListItem item = new ListItem(pureName,model,bmp);
+                    items.add(item);
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if(requestCode == CAMERA_REQUEST && resultCode == Activity.RESULT_OK){
-            photo = (Bitmap) data.getExtras().get("data");
-            if(imageView.getVisibility() == ImageView.INVISIBLE)
-                imageView.setVisibility(ImageView.VISIBLE);
-            imageView.setImageBitmap(photo);
-            photo = BitmapFactory.decodeResource(getResources(),R.drawable.cat);
-            int[] intValues = new int[photo.getHeight()*photo.getWidth()];
-            photo.getPixels(intValues, 0, photo.getWidth(), 0, 0, photo.getWidth(), photo.getHeight());
-            float[] floatValues = new float[intValues.length * 3];
-            for (int i = 0; i < intValues.length; ++i) {
-                final int val = intValues[i];
-                floatValues[i * 3] = ((val >> 16) & 0xFF) / 255.0f;
-                floatValues[i * 3 + 1] = ((val >> 8) & 0xFF) / 255.0f;
-                floatValues[i * 3 + 2] = (val & 0xFF) / 255.0f;
-            }
-
-
-            Log.d("Checkpoint","Get to network");
-
-            inferenceInterface.fillNodeFloat(
-                    INPUT_NODE, new int[] {1, 304, 304, 3}, floatValues);
-            Log.d("Checkpoint","Created Input Node");
-
-
-            inferenceInterface.runInference(new String[] {OUTPUT_NODE});
-            Log.d("Checkpoint","Ran inference");
-
-            float[] outputValues = new float[DESIRED_WIDTH * DESIRED_HEIGHT * 3];
-
-            inferenceInterface.readNodeFloat(OUTPUT_NODE, outputValues);
-            Log.d("Checkpoint","Read Output of Network");
-
-
-            Bitmap toDraw = Bitmap.createBitmap(DESIRED_WIDTH,DESIRED_HEIGHT, Bitmap.Config.ARGB_8888);
-            int[] colors = new int[DESIRED_WIDTH*DESIRED_HEIGHT];
-            for (int i = 0; i < colors.length; i ++ ) {
-                colors[i] =
-                        0xFF000000
-                                | (((int) (outputValues[i * 3] * 255)) << 16)
-                                | (((int) (outputValues[i * 3 + 1] * 255)) << 8)
-                                | ((int) (outputValues[i * 3 + 2] * 255));
-            }
-            toDraw.setPixels(colors, 0, toDraw.getWidth(), 0, 0, toDraw.getWidth(), toDraw.getHeight());
-            imageView.setImageBitmap(toDraw);
+            result = BitmapFactory.decodeFile(myFilesDir.toString() + "/temp.jpg");
+            result = Utils.cropBitmapSquare(result);
+            Log.d("size",String.valueOf(result.getWidth() + "   " + result.getHeight()));
+            //result = BitmapFactory.decodeResource(getResources(),R.drawable.gen_export);
+            result = Bitmap.createScaledBitmap(result,304,304,false);
+            result = currentModel.applyModel(result);
+            result = Bitmap.createScaledBitmap(result,400,400,false);
+            imageView.setImageBitmap(result);
+            imageView.setVisibility(View.VISIBLE);
         }
     }
 }
