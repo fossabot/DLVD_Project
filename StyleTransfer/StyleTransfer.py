@@ -175,7 +175,7 @@ def export_gen_graph(sess, variables_filter, variables_bias, path, name="gen_exp
 
     to_graph = tf.Graph()
     with to_graph.as_default() as g:
-        build_gen_graph_deep(trainable=False, variables_gen_filter=var_gen_filter_new, variables_gen_bias=var_gen_bias_new)
+        build_gen_graph_deep(trainable=False, variables_gen_filter=var_gen_filter_new, variables_gen_bias=var_gen_bias_new, input_resolution=880)
 
         #saver = tf.train.Saver(tf.all_variables())
         make_sure_path_exists(project_path + output_generator + path)
@@ -248,14 +248,14 @@ def _clip_2x2_border(x):
     return tmp
 
 
-def build_gen_graph_deep(trainable = True, variables_gen_filter = [], variables_gen_bias = [], input_pictures = 1):
+def build_gen_graph_deep(trainable = True, variables_gen_filter = [], variables_gen_bias = [], input_pictures = 1, input_resolution = 304):
 
     if trainable :
         variables_gen_filter = []
         variables_gen_bias = []
 
     graph = {}
-    input_image = tf.placeholder('float32', [input_pictures, 304, 304, 3], name="ph_input_image")
+    input_image = tf.placeholder('float32', [input_pictures, input_resolution, input_resolution, 3], name="ph_input_image")
 
     graph['conv1_0'] = _relu(_instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, input_image, filter_size=9, o_num_filter=32, is_trainable = trainable)))
     print(graph['conv1_0'].get_shape())
@@ -369,6 +369,15 @@ def calc_style_loss_64(graph):
     return style_l
 
 
+def calc_black_loss(gen_image):
+
+    x = 1.0 - gen_image
+    x = tf.reduce_prod(x, axis=3)
+
+    x = tf.nn.relu(tf.sub(x, 0.5))
+    return tf.reduce_sum(x)
+
+
 def main():
 
     input_images, content_input_images = load_pictures_for_feed("\\batch")
@@ -392,7 +401,8 @@ def main():
 
     content_loss = 0.001 * calc_content_loss(graph)
     style_loss = calc_style_loss_64(graph)
-    loss = content_loss + style_loss
+    black_loss = 10000000 * calc_black_loss(gen_image)
+    loss = content_loss + style_loss + black_loss
 
     learning_rate = 0.001;
     var_learning_rate = tf.placeholder("float32")
@@ -424,7 +434,7 @@ def main():
 
         loading_directory = "\\version_44_k"
         saving_directory = "\\version_44_k"
-        starting_pic_num = 3500
+        starting_pic_num = 5250
 
         saver = create_saver(sess)
         load_gen_last_checkpoint(sess, saver, path=loading_directory)
@@ -434,12 +444,13 @@ def main():
         last_l = sess.run(loss, feed_dict=feed)
         last_cl = sess.run(content_loss, feed_dict=feed)
         last_sl = sess.run(style_loss, feed_dict=feed)
+        last_bl = sess.run(black_loss, feed_dict=feed)
         #last_wl = sess.run(weight_loss, feed_dict=feed)
 
         neg_loss_counter = 0
         pos_loss_counter = 0
         restore= False
-        for i in range(500):
+        for i in range(0):
             if(i % 10 == 0) :
                 print(i)
 
@@ -470,10 +481,16 @@ def main():
                 print('content_loss : ' + str(cl))
                 print('content_loss_improvement : ' + str((last_cl - cl) / last_cl))
                 last_cl=cl
+
                 sl = sess.run(style_loss, feed_dict=feed)
                 print('style_loss : ' + str(sl))
                 print('style_loss_improvement : ' + str((last_sl - sl) / last_sl))
                 last_sl=sl
+
+                bl = sess.run(black_loss, feed_dict=feed)
+                print('black_loss : ' + str(bl))
+                print('black_loss_improvement : ' + str((last_bl - bl) / last_bl))
+                last_bl = bl
                 #wl = sess.run(weight_loss, feed_dict=feed)
                 #print('weight_loss : ' + str(wl))
                 #print('weight_loss_improvement : ' + str((last_wl - wl) / last_wl))
