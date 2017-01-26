@@ -2,7 +2,7 @@ import errno
 import scipy.io
 import scipy.misc
 import tensorflow as tf
-from tensorflow.contrib.copy_graph import copy_variable_to_graph
+import time
 import skimage
 import skimage.io
 import skimage.transform
@@ -22,6 +22,16 @@ log_generator = "\\logs\\generator_network"
 
 output_generator = "\\outputs\\generator_networks"
 output_images = "\\outputs\\images"
+
+
+def time_to_str(time):
+    t_in_min = time / 60.0
+    t_in_hours = time / (60.0*60.0)
+
+    frac_min = int((t_in_hours - float(int(t_in_hours)))*60.0)
+    frac_sec = int((t_in_min - float(int(t_in_min))) * 60.0)
+    return str(int(t_in_hours)) + 'h ' + str(frac_min) + 'm ' + str(frac_sec) + 's'
+
 
 def make_sure_path_exists(path):
     try:
@@ -182,7 +192,7 @@ def export_gen_graph(sess, variables_filter, variables_bias, path, name="gen_exp
         with tf.Session() as new_sess:
             init = tf.global_variables_initializer()
             new_sess.run(init)
-            summary_writer = tf.train.SummaryWriter(project_path + log_generator, graph_def=new_sess.graph_def)
+            #summary_writer = tf.train.SummaryWriter(project_path + log_generator, graph_def=new_sess.graph_def)
 
             #saver.save(new_sess, project_path + "\\android_exports" + path + name)
             tf.train.write_graph(tf.get_default_graph(), project_path + output_generator + path, name, as_text=False)
@@ -236,7 +246,7 @@ def _fract_conv2d(variables_gen_filter, variables_gen_bias, prev_layer, strides,
 
 
 def _instance_norm(x, epsilon=1e-9):
-    mean, var = tf.nn.moments(x, [0, 1, 2], keep_dims=True)
+    mean, var = tf.nn.moments(x, [1, 2], keep_dims=True)
     return tf.div(tf.sub(x , mean), tf.sqrt(tf.add(var, epsilon)))
 
 
@@ -399,10 +409,10 @@ def main():
 
     graph = load_vgg_input(batch)
 
-    content_loss = 0.001 * calc_content_loss(graph)
+    content_loss = 0.01 * calc_content_loss(graph)
     style_loss = calc_style_loss_64(graph)
-    black_loss = 10000000 * calc_black_loss(gen_image)
-    loss = content_loss + style_loss + black_loss
+    #black_loss = 10000000 * calc_black_loss(gen_image)
+    loss = content_loss + style_loss
 
     learning_rate = 0.001;
     var_learning_rate = tf.placeholder("float32")
@@ -416,7 +426,7 @@ def main():
     with tf.Session() as sess:
 
         # set log directory
-        summary_writer = tf.train.SummaryWriter(project_path + log_train,graph_def=sess.graph_def)
+        #summary_writer = tf.train.SummaryWriter(project_path + log_train,graph_def=sess.graph_def)
 
 
 
@@ -432,9 +442,9 @@ def main():
         sess.run(init, feed)
 
 
-        loading_directory = "\\version_44_k"
-        saving_directory = "\\version_44_k"
-        starting_pic_num = 5250
+        loading_directory = "\\version_46_k"
+        saving_directory = "\\version_46_k"
+        starting_pic_num = 4250
 
         saver = create_saver(sess)
         load_gen_last_checkpoint(sess, saver, path=loading_directory)
@@ -444,34 +454,42 @@ def main():
         last_l = sess.run(loss, feed_dict=feed)
         last_cl = sess.run(content_loss, feed_dict=feed)
         last_sl = sess.run(style_loss, feed_dict=feed)
-        last_bl = sess.run(black_loss, feed_dict=feed)
+        #last_bl = sess.run(black_loss, feed_dict=feed)
         #last_wl = sess.run(weight_loss, feed_dict=feed)
+
+        start_training_time = time.time()
+        last_training_checkpoint_time = start_training_time
 
         neg_loss_counter = 0
         pos_loss_counter = 0
         restore= False
-        for i in range(0):
+        for i in range(5000):
             if(i % 10 == 0) :
                 print(i)
 
             if i % 250 == 0:
                 l = sess.run(loss, feed_dict=feed)
 
-                print('learning rate : ' + str(learning_rate))
                 if (last_l -l ) < 0 and i != 0:
                     neg_loss_counter += 1
                     print('neg loss -> counter increase :' + str(neg_loss_counter))
                     if neg_loss_counter == 2 :
                         learning_rate /= 2.0
                         neg_loss_counter = 0
-                        restore = True
-                        print("new learning rate : " + str(learning_rate))
-                else :
-                    pos_loss_counter += 1
-                    if pos_loss_counter == 2 :
-                        neg_loss_counter = 0
                         pos_loss_counter = 0
-                        print('neg loss -> reset counter to 0')
+                        restore = True
+                        print('neg loss -> reset counters to 0')
+                        print("new learning rate : " + str(learning_rate))
+                else:
+                    if neg_loss_counter != 0 :
+                        pos_loss_counter += 1
+                        print('pos loss -> counter increase :' + str(pos_loss_counter))
+                        if pos_loss_counter == 2 :
+                            neg_loss_counter = 0
+                            pos_loss_counter = 0
+                            print('pos loss -> reset counters to 0')
+
+                print('learning rate : ' + str(learning_rate))
 
                 print('loss : ' + str(l))
                 print('loss_improvement : ' + str((last_l - l) / last_l))
@@ -487,18 +505,25 @@ def main():
                 print('style_loss_improvement : ' + str((last_sl - sl) / last_sl))
                 last_sl=sl
 
-                bl = sess.run(black_loss, feed_dict=feed)
-                print('black_loss : ' + str(bl))
-                print('black_loss_improvement : ' + str((last_bl - bl) / last_bl))
-                last_bl = bl
+                #bl = sess.run(black_loss, feed_dict=feed)
+                #print('black_loss : ' + str(bl))
+                #print('black_loss_improvement : ' + str((last_bl - bl) / last_bl))
+                #last_bl = bl
                 #wl = sess.run(weight_loss, feed_dict=feed)
                 #print('weight_loss : ' + str(wl))
                 #print('weight_loss_improvement : ' + str((last_wl - wl) / last_wl))
                 #last_wl=wl
+
+                t = time.time()
+                print('training time: ' + time_to_str(t - start_training_time))
+                print('training time since last checkpoint: ' + time_to_str(t - last_training_checkpoint_time))
+                last_training_checkpoint_time = t
+
                 save_image(saving_directory, '\\im' + str(i + starting_pic_num), sess.run(gen_image, feed_dict=feed), to255=True)
 
                 if restore == False :
-                    save_gen_checkpoint(sess, saver, path=saving_directory)
+                    if neg_loss_counter == 0 :
+                        save_gen_checkpoint(sess, saver, path=saving_directory)
                 else :
                     print("Restoring last checkpoint")
                     load_gen_last_checkpoint(sess, saver, path=saving_directory)
