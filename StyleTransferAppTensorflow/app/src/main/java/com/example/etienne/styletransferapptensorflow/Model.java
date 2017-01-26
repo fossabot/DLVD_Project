@@ -10,18 +10,27 @@ import org.tensorflow.contrib.android.TensorFlowInferenceInterface;
  * Created by etienne on 25.01.17.
  */
 public class Model {
-    private static String MODEL_FILE = "file:///android_asset/gen_export.pb";
+    private static String MODEL_FILE;
     private static final String INPUT_NODE = "ph_input_image";
     private static final String OUTPUT_NODE = "output";
-    private static final int DESIRED_HEIGHT = 224;    //224
+    private static final int DESIRED_HEIGHT = 224;
     private static final int DESIRED_WIDTH = 224;
+    private AssetManager am;
 
     TensorFlowInferenceInterface tensorFlowInferenceInterface;
 
     public Model(String name, AssetManager am){
         MODEL_FILE ="file:///android_asset/" + name;
         tensorFlowInferenceInterface = new TensorFlowInferenceInterface();
+        this.am = am;
+    }
+
+    public void initializeStyle(){
         tensorFlowInferenceInterface.initializeTensorFlow(am,MODEL_FILE);
+    }
+
+    public void closeStyle(){
+        tensorFlowInferenceInterface.close();
     }
 
 

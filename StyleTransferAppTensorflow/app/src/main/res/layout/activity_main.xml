@@ -9,20 +9,27 @@
         android:layout_height="wrap_content"
         tools:context="com.example.etienne.styletransferapptensorflow.MainActivity">
 
+    <ImageView
+            android:visibility="invisible"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" app:srcCompat="@drawable/cat" android:layout_alignParentTop="true"
+            android:layout_alignParentLeft="true" android:layout_alignParentStart="true"
+            android:layout_marginLeft="24dp" android:layout_marginStart="24dp" android:layout_marginTop="107dp"
+            android:id="@+id/imageView"/>
     <Button
             android:text="Take Photo"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:id="@+id/photoButton"
             android:layout_weight="0.29"
-            android:layout_alignParentBottom="true" android:layout_alignParentRight="true"
-            android:layout_alignParentEnd="true" android:layout_marginRight="65dp" android:layout_marginEnd="65dp"
-            android:layout_marginBottom="18dp"/>
-    <ImageView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content" app:srcCompat="@drawable/cat" android:layout_alignParentTop="true"
-            android:layout_alignParentLeft="true" android:layout_alignParentStart="true"
-            android:layout_marginLeft="24dp" android:layout_marginStart="24dp" android:layout_marginTop="107dp"
-            android:id="@+id/imageView"/>
+            android:layout_marginRight="22dp" android:layout_marginEnd="22dp"
+            android:layout_alignBottom="@+id/imageView" android:layout_alignParentRight="true"
+            android:layout_alignParentEnd="true" android:layout_marginBottom="36dp"/>
+    <android.support.v7.widget.RecyclerView
+            android:layout_width="match_parent"
+            android:id="@+id/listView" android:clipToPadding="false" android:layout_height="100dp"
+            android:layout_marginTop="192dp"
+            android:layout_below="@+id/imageView" android:layout_alignParentLeft="true"
+            android:layout_alignParentStart="true"/>
 
 </RelativeLayout>
