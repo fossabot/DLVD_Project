@@ -430,8 +430,8 @@ def main():
 
 
 
-        #optimizer = tf.train.MomentumOptimizer(0.0001, 0.9)
-        optimizer = tf.train.AdamOptimizer(learning_rate=var_learning_rate)
+        optimizer = tf.train.MomentumOptimizer(learning_rate=var_learning_rate, momentum=0.9)
+        #optimizer = tf.train.AdamOptimizer(learning_rate=var_learning_rate)
         #optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.5)
         variables = variables_gen_filter + variables_gen_bias
         train_step = optimizer.minimize(loss, var_list=variables)
@@ -442,12 +442,12 @@ def main():
         sess.run(init, feed)
 
 
-        loading_directory = "\\version_46_k"
-        saving_directory = "\\version_46_k"
-        starting_pic_num = 4250
+        loading_directory = "\\version_47_k"
+        saving_directory = "\\version_47_k"
+        starting_pic_num = 0
 
         saver = create_saver(sess)
-        load_gen_last_checkpoint(sess, saver, path=loading_directory)
+        #load_gen_last_checkpoint(sess, saver, path=loading_directory)
 
 
         i = 0
@@ -461,33 +461,36 @@ def main():
         last_training_checkpoint_time = start_training_time
 
         neg_loss_counter = 0
-        pos_loss_counter = 0
+        avoid_save_loss = -1.0;
+
         restore= False
-        for i in range(5000):
+        last_saved_iteration = 0
+        for i in range(20000):
             if(i % 10 == 0) :
                 print(i)
 
             if i % 250 == 0:
                 l = sess.run(loss, feed_dict=feed)
 
-                if (last_l -l ) < 0 and i != 0:
+                if (last_l - l ) < 0 and i != 0:
+                    avoid_save_loss = last_l
                     neg_loss_counter += 1
                     print('neg loss -> counter increase :' + str(neg_loss_counter))
-                    if neg_loss_counter == 2 :
-                        learning_rate /= 2.0
+                    if neg_loss_counter == 3 :
+                        learning_rate /= 10.0
                         neg_loss_counter = 0
-                        pos_loss_counter = 0
                         restore = True
                         print('neg loss -> reset counters to 0')
                         print("new learning rate : " + str(learning_rate))
                 else:
-                    if neg_loss_counter != 0 :
-                        pos_loss_counter += 1
-                        print('pos loss -> counter increase :' + str(pos_loss_counter))
-                        if pos_loss_counter == 2 :
-                            neg_loss_counter = 0
-                            pos_loss_counter = 0
-                            print('pos loss -> reset counters to 0')
+                    if avoid_save_loss != -1.0 :
+                        if l < avoid_save_loss:
+                            avoid_save_loss = -1.0
+                            neg_loss_counter = 0;
+                            print("loss reached best result again")
+                            print("reset counter to 0")
+                        else:
+                            print("avoid saving until loss becomes smaller again:" + str(l - avoid_save_loss))
 
                 print('learning rate : ' + str(learning_rate))
 
@@ -521,11 +524,12 @@ def main():
 
                 save_image(saving_directory, '\\im' + str(i + starting_pic_num), sess.run(gen_image, feed_dict=feed), to255=True)
 
-                if restore == False :
-                    if neg_loss_counter == 0 :
+                if restore == False:
+                    if avoid_save_loss != -1 :
                         save_gen_checkpoint(sess, saver, path=saving_directory)
-                else :
-                    print("Restoring last checkpoint")
+                        last_saved_iteration = i
+                else:
+                    print("Restoring last checkpoint -> iteration : " + str(last_saved_iteration))
                     load_gen_last_checkpoint(sess, saver, path=saving_directory)
                     restore = False
                     print("Done")
