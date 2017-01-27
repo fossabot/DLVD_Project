@@ -4,8 +4,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.res.Resources;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
+import android.graphics.*;
 import android.media.Image;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
@@ -42,7 +41,14 @@ public class StyleAdapter extends RecyclerView.Adapter<StyleAdapter.MyViewHolder
     public void onBindViewHolder(MyViewHolder holder, int position) {
         ListItem item = items.get(position);
         holder.textView.setText(item.getStyleName());
-        holder.imageView.setImageBitmap(item.getImage());
+        Bitmap toDraw = item.getImage();
+        Bitmap imageRounded = Bitmap.createBitmap(toDraw.getWidth(), toDraw.getHeight(), toDraw.getConfig());
+        Canvas canvas = new Canvas(imageRounded);
+        Paint mpaint = new Paint();
+        mpaint.setAntiAlias(true);
+        mpaint.setShader(new BitmapShader(toDraw, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP));
+        canvas.drawRoundRect((new RectF(0, 0, toDraw.getWidth(), toDraw.getHeight())), 50, 50, mpaint);
+        holder.imageView.setImageBitmap(imageRounded);
     }
 
     @Override
