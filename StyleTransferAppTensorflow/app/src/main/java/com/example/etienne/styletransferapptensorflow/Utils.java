@@ -29,7 +29,6 @@ public class Utils {
             int padding = (width - height)/2;
             for(int i = 0; i < shortEdge; i++){
                 for(int j = padding; j < padding + shortEdge; j++){
-                    Log.d("Evenet","Set Pixel");
                     newMap.setPixel(j - padding,i,bm.getPixel(j,i));
                 }
             }

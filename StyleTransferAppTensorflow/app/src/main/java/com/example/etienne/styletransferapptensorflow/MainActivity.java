@@ -23,7 +23,6 @@ import android.util.SparseIntArray;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
-import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.Toast;
@@ -38,7 +37,6 @@ import java.util.List;
 public class MainActivity extends AppCompatActivity {
     //Variables for built-in camera
     private static final String TAG = "StyleActivity";
-    private Button takePictureButton;
     private TextureView textureView;
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
     static {
@@ -54,15 +52,18 @@ public class MainActivity extends AppCompatActivity {
     private Size imageDimension;
     private ImageReader imageReader;
     private static final int REQUEST_CAMERA_PERMISSION = 200;
-    private Handler mBackgroundHandler;
-    private HandlerThread mBackgroundThread;
+    private Handler backgroundHandler;
+    private HandlerThread backgroundThread;
+    private static int currentCamera = 0;
 
     private Bitmap currentImage;
     /////////////////////////////////////////////////////////
 
 
     //Variables for standard Application
-    private ImageButton button;
+    private ImageButton photoButton;
+    private ImageButton switchButton;
+    private ImageButton backButton;
     private ImageView imageView;
     private RecyclerView recyclerView;
     private ArrayList<ListItem> items;
@@ -71,21 +72,11 @@ public class MainActivity extends AppCompatActivity {
 
     //////////////////////////////////////
 
-
-
-    File myFilesDir;
-
-    private static final int CAMERA_REQUEST = 1888;
-
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        LinearLayoutManager layoutManager= new LinearLayoutManager(this,LinearLayoutManager.HORIZONTAL, false);
-        recyclerView = (RecyclerView) findViewById(R.id.listView);
-        recyclerView.setLayoutManager(layoutManager);
         imageView = (ImageView) this.findViewById(R.id.imageView);
 
         textureView = (TextureView) findViewById(R.id.textureView);
@@ -94,8 +85,11 @@ public class MainActivity extends AppCompatActivity {
 
         items = new ArrayList<>();
         fetchData();
-
         StyleAdapter adapter = new StyleAdapter(items);
+
+        LinearLayoutManager layoutManager= new LinearLayoutManager(this,LinearLayoutManager.HORIZONTAL, false);
+        recyclerView = (RecyclerView) findViewById(R.id.listView);
+        recyclerView.setLayoutManager(layoutManager);
         recyclerView.setItemAnimator(new DefaultItemAnimator());
         recyclerView.addItemDecoration(new DividerItemDecoration(this,LinearLayoutManager.HORIZONTAL));
         recyclerView.setAdapter(adapter);
@@ -117,25 +111,41 @@ public class MainActivity extends AppCompatActivity {
             }
         }));
 
-        button = (ImageButton) this.findViewById(R.id.photoButton);
-        button.setOnClickListener(new View.OnClickListener() {
+        photoButton = (ImageButton) this.findViewById(R.id.photoButton);
+        photoButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                takePicture();
-                currentImage = BitmapFactory.decodeFile(Environment.getExternalStorageDirectory()+"/pic.jpg");
-                if (currentImage != null){
-                    currentImage = Utils.cropBitmapSquare(currentImage);
-                    Log.d("size",String.valueOf(currentImage.getWidth() + "   " + currentImage.getHeight()));
-                    //result = BitmapFactory.decodeResource(getResources(),R.drawable.gen_export);
-                    currentImage = Bitmap.createScaledBitmap(currentImage,304,304,false);
-                    currentImage = currentModel.applyModel(currentImage);
-                    //result = Bitmap.createScaledBitmap(result,400,400,false);
-                    imageView.setImageBitmap(currentImage);
-                    imageView.setVisibility(View.VISIBLE);
-                    textureView.setVisibility(View.INVISIBLE);
+                if(currentModel == null){
+                    Toast.makeText(MainActivity.this, "You did not select a model!", Toast.LENGTH_SHORT).show();
+                    return;
                 }
+                takePicture();
             }
         });
+
+        switchButton = (ImageButton) this.findViewById(R.id.switchButton);
+        switchButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                closeCamera();
+                currentCamera = currentCamera == 0 ? 1 : 0;
+                openCamera();
+            }
+        });
+
+        backButton = (ImageButton) this.findViewById(R.id.backButton);
+        backButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                textureView.setVisibility(View.VISIBLE);
+                imageView.setVisibility(View.INVISIBLE);
+                openCamera();
+                backButton.setVisibility(View.GONE);
+            }
+        });
+
+
+
     }
 
     @Override
@@ -164,7 +174,6 @@ public class MainActivity extends AppCompatActivity {
                 if (name.contains(".pb")) {
                     Model model = new Model(name, getAssets());
                     String pureName = name.substring(0, name.indexOf("."));
-                    Log.d("purename", pureName);
                     int id = getResources().getIdentifier(pureName, "drawable", getPackageName());
                     Bitmap bmp = BitmapFactory.decodeResource(getResources(), id);
                     ListItem item = new ListItem(pureName, model, bmp);
@@ -179,12 +188,11 @@ public class MainActivity extends AppCompatActivity {
     TextureView.SurfaceTextureListener textureListener = new TextureView.SurfaceTextureListener() {
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
-            //open your camera here
             openCamera();
         }
         @Override
         public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
-            // Transform you image captured size according to the surface width and height
+
         }
         @Override
         public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
@@ -198,7 +206,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onOpened(CameraDevice camera) {
             //This is called when the camera is open
-            Log.e(TAG, "onOpened");
+            Log.e(TAG, "Camera opened");
             cameraDevice = camera;
             createCameraPreview();
         }
@@ -213,23 +221,23 @@ public class MainActivity extends AppCompatActivity {
         }
     };
     protected void startBackgroundThread() {
-        mBackgroundThread = new HandlerThread("Camera Background");
-        mBackgroundThread.start();
-        mBackgroundHandler = new Handler(mBackgroundThread.getLooper());
+        backgroundThread = new HandlerThread("Started Camera Background thread");
+        backgroundThread.start();
+        backgroundHandler = new Handler(backgroundThread.getLooper());
     }
     protected void stopBackgroundThread() {
-        mBackgroundThread.quitSafely();
+        backgroundThread.quitSafely();
         try {
-            mBackgroundThread.join();
-            mBackgroundThread = null;
-            mBackgroundHandler = null;
+            backgroundThread.join();
+            backgroundThread = null;
+            backgroundHandler = null;
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
     }
     protected void takePicture() {
         if(null == cameraDevice) {
-            Log.e(TAG, "cameraDevice is null");
+            Log.e(TAG, "Camera Device is null");
             return;
         }
         CameraManager manager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
@@ -245,7 +253,7 @@ public class MainActivity extends AppCompatActivity {
                 width = jpegSizes[0].getWidth();
                 height = jpegSizes[0].getHeight();
             }
-            ImageReader reader = ImageReader.newInstance(width, height, ImageFormat.JPEG, 1);
+            ImageReader reader = ImageReader.newInstance(width, height, ImageFormat.JPEG,1);
             List<Surface> outputSurfaces = new ArrayList<Surface>(2);
             outputSurfaces.add(reader.getSurface());
             outputSurfaces.add(new Surface(textureView.getSurfaceTexture()));
@@ -255,7 +263,6 @@ public class MainActivity extends AppCompatActivity {
             // Orientation
             int rotation = getWindowManager().getDefaultDisplay().getRotation();
             captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation));
-            final File file = new File(Environment.getExternalStorageDirectory()+"/pic.jpg");
             ImageReader.OnImageAvailableListener readerListener = new ImageReader.OnImageAvailableListener() {
                 @Override
                 public void onImageAvailable(ImageReader reader) {
@@ -263,44 +270,41 @@ public class MainActivity extends AppCompatActivity {
                     try {
                         image = reader.acquireLatestImage();
                         ByteBuffer buffer = image.getPlanes()[0].getBuffer();
-                        byte[] bytes = new byte[buffer.capacity()];
+                        byte[] bytes = new byte[buffer.remaining()];
                         buffer.get(bytes);
-                        save(bytes);
-                    } catch (FileNotFoundException e) {
-                        e.printStackTrace();
-                    } catch (IOException e) {
-                        e.printStackTrace();
+                        currentImage = BitmapFactory.decodeByteArray(bytes,0,bytes.length);
                     } finally {
-                        if (image != null) {
-                            image.close();
-                        }
-                    }
-                }
-                private void save(byte[] bytes) throws IOException {
-                    OutputStream output = null;
-                    try {
-                        output = new FileOutputStream(file);
-                        output.write(bytes);
-                    } finally {
-                        if (null != output) {
-                            output.close();
-                        }
+                        image.close();
                     }
                 }
             };
-            reader.setOnImageAvailableListener(readerListener, mBackgroundHandler);
+
+            reader.setOnImageAvailableListener(readerListener, backgroundHandler);
             final CameraCaptureSession.CaptureCallback captureListener = new CameraCaptureSession.CaptureCallback() {
                 @Override
                 public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request, TotalCaptureResult result) {
                     super.onCaptureCompleted(session, request, result);
-                    createCameraPreview();
+                    currentImage = Utils.cropBitmapSquare(currentImage);
+                    currentImage = Bitmap.createScaledBitmap(currentImage,304,304,false);
+                    currentImage = currentModel.applyModel(currentImage);
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            currentImage = Bitmap.createScaledBitmap(currentImage,300,300,false);
+                            backButton.setVisibility(View.VISIBLE);
+                            imageView.setImageBitmap(currentImage);
+                            imageView.setVisibility(View.VISIBLE);
+                            closeCamera();
+                            textureView.setVisibility(View.INVISIBLE);
+                        }
+                    });
                 }
             };
             cameraDevice.createCaptureSession(outputSurfaces, new CameraCaptureSession.StateCallback() {
                 @Override
                 public void onConfigured(CameraCaptureSession session) {
                     try {
-                        session.capture(captureBuilder.build(), captureListener, mBackgroundHandler);
+                        session.capture(captureBuilder.build(), captureListener, backgroundHandler);
                     } catch (CameraAccessException e) {
                         e.printStackTrace();
                     }
@@ -308,7 +312,7 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public void onConfigureFailed(CameraCaptureSession session) {
                 }
-            }, mBackgroundHandler);
+            }, backgroundHandler);
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
@@ -343,9 +347,9 @@ public class MainActivity extends AppCompatActivity {
     }
     private void openCamera() {
         CameraManager manager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
-        Log.e(TAG, "is camera open");
+        Log.e(TAG, "Trying to open camera");
         try {
-            cameraId = manager.getCameraIdList()[0];
+            cameraId = manager.getCameraIdList()[currentCamera];
             CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
             StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
             assert map != null;
@@ -359,15 +363,15 @@ public class MainActivity extends AppCompatActivity {
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
-        Log.e(TAG, "openCamera X");
+        Log.e(TAG, "Opened Camera");
     }
     protected void updatePreview() {
         if(null == cameraDevice) {
-            Log.e(TAG, "updatePreview error, return");
+            Log.e(TAG, "No Camera Device, Updating preview not possible");
         }
         captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO);
         try {
-            cameraCaptureSessions.setRepeatingRequest(captureRequestBuilder.build(), null, mBackgroundHandler);
+            cameraCaptureSessions.setRepeatingRequest(captureRequestBuilder.build(), null, backgroundHandler);
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
@@ -382,30 +386,15 @@ public class MainActivity extends AppCompatActivity {
             imageReader = null;
         }
     }
+
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         if (requestCode == REQUEST_CAMERA_PERMISSION) {
             if (grantResults[0] == PackageManager.PERMISSION_DENIED) {
                 // close the app
-                Toast.makeText(MainActivity.this, "Sorry!!!, you can't use this app without granting permission", Toast.LENGTH_LONG).show();
+                Toast.makeText(MainActivity.this, "You denied the permissions needed to run this app", Toast.LENGTH_LONG).show();
                 finish();
             }
         }
     }
-    /*
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if(requestCode == CAMERA_REQUEST && resultCode == Activity.RESULT_OK){
-            result = BitmapFactory.decodeFile(myFilesDir.toString() + "/temp.jpg");
-            result = Utils.cropBitmapSquare(result);
-            Log.d("size",String.valueOf(result.getWidth() + "   " + result.getHeight()));
-            //result = BitmapFactory.decodeResource(getResources(),R.drawable.gen_export);
-            result = Bitmap.createScaledBitmap(result,880,880,false);
-            result = currentModel.applyModel(result);
-            //result = Bitmap.createScaledBitmap(result,400,400,false);
-            imageView.setImageBitmap(result);
-            imageView.setVisibility(View.VISIBLE);
-        }
-    }*/
 }
