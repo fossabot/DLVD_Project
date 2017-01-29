@@ -2,16 +2,20 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
           package="com.example.etienne.styletransferapptensorflow">
 
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <uses-feature android:name="android.hardware.camera2.full" />
+    <uses-sdk
+            android:maxSdkVersion="25"
+            android:minSdkVersion="21"
+            android:targetSdkVersion="23"/>
 
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
 
-    <uses-sdk android:minSdkVersion="21"
-              android:targetSdkVersion="23"
-              android:maxSdkVersion="25" />
+    <uses-feature android:name="android.hardware.camera2.full"/>
+
+    <android:uses-permission android:name="android.permission.READ_PHONE_STATE"/>
+    <android:uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+
     <application
-
             android:allowBackup="true"
             android:icon="@mipmap/ic_launcher"
             android:label="@string/app_name"
@@ -23,6 +27,8 @@
 
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+        </activity>
+        <activity android:name=".ShowActivity">
         </activity>
     </application>
 

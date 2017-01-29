@@ -12,7 +12,7 @@ public class Utils {
         int width = bm.getWidth();
         int height = bm.getHeight();
 
-        Log.d("Size",String.valueOf(width + "|" + height));
+        Log.d("Started Cropping",String.valueOf(width + "|" + height));
 
         int shortEdge = width <  height ? width : height;
 

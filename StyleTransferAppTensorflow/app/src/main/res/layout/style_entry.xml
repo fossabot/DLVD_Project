@@ -4,19 +4,17 @@
               android:layout_width="wrap_content"
               android:layout_height="wrap_content"
               android:layout_marginLeft="10dp"
-              android:layout_marginRight="10dp"
-              android:background="@android:color/transparent">
+              android:layout_marginRight="10dp">
 
     <TextView
             android:text="TextView"
-            android:background="@android:color/holo_blue_bright"
-            android:src="@drawable/itemstyle"
-            android:layout_width="wrap_content"
+            android:textColor="@color/Gray"
+            android:layout_width="match_parent"
             android:gravity="center"
-            android:layout_height="wrap_content" android:id="@+id/styleName"
-            android:layout_marginLeft="15dp"/>
+            android:layout_height="wrap_content" android:id="@+id/styleName"/>
     <ImageView
             android:layout_width="wrap_content"
+            android:src="@drawable/itemstyle"
             android:layout_height="wrap_content"  android:id="@+id/styleImage"
-            android:src="@drawable/itemstyle"/>
+            android:layout_marginBottom="10dp"/>
 </LinearLayout>

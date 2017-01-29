@@ -3,6 +3,7 @@ package com.example.etienne.styletransferapptensorflow;
 import android.Manifest;
 import android.content.Context;
 
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.*;
 import android.hardware.camera2.*;
@@ -24,7 +25,7 @@ import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.widget.ImageButton;
-import android.widget.ImageView;
+import android.widget.ProgressBar;
 import android.widget.Toast;
 
 import java.io.*;
@@ -37,7 +38,6 @@ import java.util.List;
 public class MainActivity extends AppCompatActivity {
     //Variables for built-in camera
     private static final String TAG = "StyleActivity";
-    private TextureView textureView;
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
     static {
         ORIENTATIONS.append(Surface.ROTATION_0, 90);
@@ -63,12 +63,8 @@ public class MainActivity extends AppCompatActivity {
     //Variables for standard Application
     private ImageButton photoButton;
     private ImageButton switchButton;
-    private ImageButton backButton;
-    private ImageView imageView;
-    private RecyclerView recyclerView;
-    private ArrayList<ListItem> items;
-    private int lastSelection = -1;
-    private Model currentModel = null;
+    private TextureView textureView;
+    private ProgressBar progressBar;
 
     //////////////////////////////////////
 
@@ -77,48 +73,15 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        imageView = (ImageView) this.findViewById(R.id.imageView);
-
         textureView = (TextureView) findViewById(R.id.textureView);
         assert textureView != null;
         textureView.setSurfaceTextureListener(textureListener);
 
-        items = new ArrayList<>();
-        fetchData();
-        StyleAdapter adapter = new StyleAdapter(items);
-
-        LinearLayoutManager layoutManager= new LinearLayoutManager(this,LinearLayoutManager.HORIZONTAL, false);
-        recyclerView = (RecyclerView) findViewById(R.id.listView);
-        recyclerView.setLayoutManager(layoutManager);
-        recyclerView.setItemAnimator(new DefaultItemAnimator());
-        recyclerView.addItemDecoration(new DividerItemDecoration(this,LinearLayoutManager.HORIZONTAL));
-        recyclerView.setAdapter(adapter);
-        recyclerView.addOnItemTouchListener(new StyleTouchListener(getApplicationContext(), new StyleTouchListener.OnItemClickListener() {
-            @Override
-            public void onItemClick(View view, int position) {
-                if(lastSelection == -1){
-                    lastSelection = position;
-                    items.get(position).activateStyle();
-                    currentModel = items.get(position).getModel();
-                }else{
-                    items.get(lastSelection).disableStyle();
-                    lastSelection = position;
-                    items.get(position).activateStyle();
-                    currentModel = items.get(position).getModel();
-                }
-
-                Toast.makeText(MainActivity.this, "Currently selected style "+ items.get(position).getStyleName() , Toast.LENGTH_SHORT).show();
-            }
-        }));
 
         photoButton = (ImageButton) this.findViewById(R.id.photoButton);
         photoButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if(currentModel == null){
-                    Toast.makeText(MainActivity.this, "You did not select a model!", Toast.LENGTH_SHORT).show();
-                    return;
-                }
                 takePicture();
             }
         });
@@ -133,19 +96,8 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        backButton = (ImageButton) this.findViewById(R.id.backButton);
-        backButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                textureView.setVisibility(View.VISIBLE);
-                imageView.setVisibility(View.INVISIBLE);
-                openCamera();
-                backButton.setVisibility(View.GONE);
-            }
-        });
-
-
-
+        progressBar = (ProgressBar) this.findViewById(R.id.progressBar1);
+        progressBar.setVisibility(View.GONE);
     }
 
     @Override
@@ -167,23 +119,6 @@ public class MainActivity extends AppCompatActivity {
         super.onPause();
     }
 
-    private void fetchData() {
-        try {
-            String[] names = getAssets().list("");
-            for (String name : names) {
-                if (name.contains(".pb")) {
-                    Model model = new Model(name, getAssets());
-                    String pureName = name.substring(0, name.indexOf("."));
-                    int id = getResources().getIdentifier(pureName, "drawable", getPackageName());
-                    Bitmap bmp = BitmapFactory.decodeResource(getResources(), id);
-                    ListItem item = new ListItem(pureName, model, bmp);
-                    items.add(item);
-                }
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
 
     TextureView.SurfaceTextureListener textureListener = new TextureView.SurfaceTextureListener() {
         @Override
@@ -284,18 +219,21 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request, TotalCaptureResult result) {
                     super.onCaptureCompleted(session, request, result);
+                    progressBar.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            progressBar.setVisibility(View.VISIBLE);
+                        }
+                    });
                     currentImage = Utils.cropBitmapSquare(currentImage);
                     currentImage = Bitmap.createScaledBitmap(currentImage,304,304,false);
-                    currentImage = currentModel.applyModel(currentImage);
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            currentImage = Bitmap.createScaledBitmap(currentImage,300,300,false);
-                            backButton.setVisibility(View.VISIBLE);
-                            imageView.setImageBitmap(currentImage);
-                            imageView.setVisibility(View.VISIBLE);
                             closeCamera();
-                            textureView.setVisibility(View.INVISIBLE);
+                            Intent showImage = new Intent(MainActivity.this,ShowActivity.class);
+                            showImage.putExtra("image",currentImage);
+                            startActivity(showImage);
                         }
                     });
                 }
