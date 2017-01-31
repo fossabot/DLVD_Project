@@ -716,10 +716,10 @@ def main():
 
         loading_directory = "\\version_49_k"
         saving_directory = "\\version_49_k"
-        starting_pic_num = 0
+        starting_pic_num = 1500
 
         saver = create_saver(sess)
-        #load_gen_last_checkpoint(sess, saver, path=loading_directory)
+        load_gen_last_checkpoint(sess, saver, path=loading_directory)
 
 
         i = 0

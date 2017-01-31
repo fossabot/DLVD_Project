@@ -178,6 +178,7 @@ Temporary Items
 *.tfmodel
 StyleTransfer/logs/
 StyleTransfer/data
+StyleTransfer/outputs/images
 StyleTransferAppTensorflow/app/src/main/assets/
 
 
