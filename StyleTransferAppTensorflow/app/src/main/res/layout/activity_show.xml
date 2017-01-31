@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout
+        xmlns:android="http://schemas.android.com/apk/res/android"
+        xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:tools="http://schemas.android.com/tools"
+        android:id="@+id/activity_show"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@android:color/background_dark"
+        tools:context="com.example.etienne.styletransferapptensorflow.ShowActivity">
+
+    <LinearLayout
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" android:weightSum="1">
+        <ImageView
+                android:layout_width="match_parent"
+                android:background="@drawable/image_border"
+                android:layout_height="242dp" app:srcCompat="@drawable/back_arrow" android:id="@+id/imageView5"
+                android:layout_weight="0.78"/>
+        <LinearLayout
+                android:orientation="horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+            <ImageButton
+                    android:layout_width="94dp"
+                    android:background="@android:color/transparent"
+                    android:layout_height="67dp" app:srcCompat="@drawable/back_arrow" android:id="@+id/backButton"/>
+        </LinearLayout>
+        <android.support.v7.widget.RecyclerView
+                android:layout_width="match_parent"
+                android:layout_height="75dp"
+                android:id="@+id/listView" android:clipToPadding="false"
+                android:layout_alignParentLeft="true"
+                android:layout_alignParentStart="true" android:layout_marginLeft="5dp"
+                android:layout_weight="0.84">
+        </android.support.v7.widget.RecyclerView>
+    </LinearLayout>
+</RelativeLayout>
