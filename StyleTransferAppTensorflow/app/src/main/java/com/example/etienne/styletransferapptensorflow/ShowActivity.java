@@ -3,16 +3,16 @@ package com.example.etienne.styletransferapptensorflow;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.os.AsyncTask;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.DefaultItemAnimator;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.view.View;
-import android.widget.ImageButton;
-import android.widget.ImageView;
-import android.widget.Toast;
+import android.widget.*;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 
@@ -21,6 +21,8 @@ public class ShowActivity extends AppCompatActivity {
     private Bitmap image;
     private RecyclerView recyclerView;
     private ImageButton backButton;
+    private ProgressBar progressBar;
+
 
     private ArrayList<ListItem> items;
     private int lastSelection = -1;
@@ -31,9 +33,15 @@ public class ShowActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_show);
 
-        imageView = (ImageView) this.findViewById(R.id.imageView5);
-        image = getIntent().getParcelableExtra("image");
+        progressBar = (ProgressBar) this.findViewById(R.id.showProgressBar);
+        progressBar.setVisibility(View.GONE);
 
+        imageView = (ImageView) this.findViewById(R.id.showImageView);
+        try {
+            image = BitmapFactory.decodeStream(getApplicationContext().openFileInput(getIntent().getStringExtra("imageUri")));
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        }
         imageView.setImageBitmap(image);
 
         items = new ArrayList<>();
@@ -51,14 +59,10 @@ public class ShowActivity extends AppCompatActivity {
         recyclerView.addOnItemTouchListener(new StyleTouchListener(getApplicationContext(), new StyleTouchListener.OnItemClickListener() {
             @Override
             public void onItemClick(View view, int position) {
-                if(lastSelection != -1){
-                    items.get(lastSelection).disableStyle();
-                }
                 lastSelection = position;
                 items.get(position).activateStyle();
                 currentModel = items.get(position).getModel();
-                image = currentModel.applyModel(image);
-                imageView.setImageBitmap(image);
+                new ApplyModelTask().execute(image);
             }
         }));
 
@@ -88,6 +92,34 @@ public class ShowActivity extends AppCompatActivity {
             }
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+    private class ApplyModelTask extends AsyncTask<Bitmap,String,Bitmap> {
+
+        @Override
+        protected void onPreExecute() {
+            super.onPreExecute();
+            progressBar.setVisibility(View.VISIBLE);
+        }
+
+        @Override
+        protected Bitmap doInBackground(Bitmap... params) {
+            Bitmap bm = params[0];
+            bm = Bitmap.createScaledBitmap(bm,304,304,false);
+            return currentModel.applyModel(bm);
+        }
+
+        @Override
+        protected void onProgressUpdate(String... values) {
+            super.onProgressUpdate(values);
+        }
+
+        @Override
+        protected void onPostExecute(Bitmap bitmap) {
+            super.onPostExecute(bitmap);
+            progressBar.setVisibility(View.GONE);
+            imageView.setImageBitmap(bitmap);
         }
     }
 }
