@@ -10,17 +10,15 @@ import android.hardware.camera2.*;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
+import android.net.Uri;
 import android.os.*;
+import android.provider.MediaStore;
 import android.support.annotation.NonNull;
 import android.support.annotation.RequiresApi;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
-import android.support.v7.widget.DefaultItemAnimator;
-import android.support.v7.widget.LinearLayoutManager;
-import android.support.v7.widget.RecyclerView;
 import android.util.Log;
 import android.util.Size;
-import android.util.SparseIntArray;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
@@ -38,13 +36,7 @@ import java.util.List;
 public class MainActivity extends AppCompatActivity {
     //Variables for built-in camera
     private static final String TAG = "StyleActivity";
-    private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
-    static {
-        ORIENTATIONS.append(Surface.ROTATION_0, 90);
-        ORIENTATIONS.append(Surface.ROTATION_90, 0);
-        ORIENTATIONS.append(Surface.ROTATION_180, 270);
-        ORIENTATIONS.append(Surface.ROTATION_270, 180);
-    }
+
     private String cameraId;
     protected CameraDevice cameraDevice;
     protected CameraCaptureSession cameraCaptureSessions;
@@ -58,11 +50,12 @@ public class MainActivity extends AppCompatActivity {
 
     private Bitmap currentImage;
     /////////////////////////////////////////////////////////
-
+    private static final int PICK_IMAGE_REQUEST = 1;
 
     //Variables for standard Application
     private ImageButton photoButton;
     private ImageButton switchButton;
+    private ImageButton galleryButton;
     private TextureView textureView;
     private ProgressBar progressBar;
 
@@ -98,6 +91,17 @@ public class MainActivity extends AppCompatActivity {
 
         progressBar = (ProgressBar) this.findViewById(R.id.progressBar1);
         progressBar.setVisibility(View.GONE);
+
+        galleryButton = (ImageButton) this.findViewById(R.id.galleryButton);
+        galleryButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent();
+                intent.setType("image/*");
+                intent.setAction(Intent.ACTION_GET_CONTENT);
+                startActivityForResult(Intent.createChooser(intent, "Select Picture"), PICK_IMAGE_REQUEST);
+            }
+        });
     }
 
     @Override
@@ -196,8 +200,8 @@ public class MainActivity extends AppCompatActivity {
             captureBuilder.addTarget(reader.getSurface());
             captureBuilder.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO);
             // Orientation
-            int rotation = getWindowManager().getDefaultDisplay().getRotation();
-            captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation));
+            int rotation = currentCamera == 0 ? 90 : 270;
+            captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, rotation);
             ImageReader.OnImageAvailableListener readerListener = new ImageReader.OnImageAvailableListener() {
                 @Override
                 public void onImageAvailable(ImageReader reader) {
@@ -226,13 +230,20 @@ public class MainActivity extends AppCompatActivity {
                         }
                     });
                     currentImage = Utils.cropBitmapSquare(currentImage);
-                    currentImage = Bitmap.createScaledBitmap(currentImage,304,304,false);
+                    if(currentCamera == 1) {
+                        Matrix mtx = new Matrix();
+                        mtx.preScale(-1.0f, 1.0f);
+                        currentImage = Bitmap.createBitmap(currentImage,0,0,currentImage.getWidth(),currentImage.getHeight(),mtx,true);
+                    }else{
+                        currentImage = Bitmap.createScaledBitmap(currentImage,1000,1000,false);
+                    }
+                    final String uri = saveImageInternal(currentImage);
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
                             closeCamera();
                             Intent showImage = new Intent(MainActivity.this,ShowActivity.class);
-                            showImage.putExtra("image",currentImage);
+                            showImage.putExtra("imageUri",uri);
                             startActivity(showImage);
                         }
                     });
@@ -333,6 +344,54 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(MainActivity.this, "You denied the permissions needed to run this app", Toast.LENGTH_LONG).show();
                 finish();
             }
+        }
+    }
+
+
+    public String saveImageInternal(Bitmap bitmap) {
+        String fileName = "myImage";
+        try {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, bytes);
+            FileOutputStream fo = openFileOutput(fileName, Context.MODE_PRIVATE);
+            fo.write(bytes.toByteArray());
+            // remember close file output
+            fo.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+            fileName = null;
+        }
+        return fileName;
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == PICK_IMAGE_REQUEST && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            Uri uri = data.getData();
+            closeCamera();
+            try {
+                final Bitmap bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), uri);
+                currentImage = bitmap;
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            Thread t = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    currentImage = Utils.cropBitmapSquare(currentImage);
+                }
+            });
+            t.start();
+            try {
+                t.join();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            final String imageUri = saveImageInternal(currentImage);
+            Intent showImage = new Intent(MainActivity.this,ShowActivity.class);
+            showImage.putExtra("imageUri",imageUri);
+            startActivity(showImage);
         }
     }
 }

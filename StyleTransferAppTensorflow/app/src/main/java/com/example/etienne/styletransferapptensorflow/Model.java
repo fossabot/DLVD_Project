@@ -3,7 +3,9 @@ package com.example.etienne.styletransferapptensorflow;
 
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
+import android.os.AsyncTask;
 import android.util.Log;
+import android.widget.TextView;
 import org.tensorflow.contrib.android.TensorFlowInferenceInterface;
 
 /**
@@ -34,7 +36,7 @@ public class Model {
     }
 
 
-    public Bitmap applyModel(Bitmap bm ){
+    public Bitmap applyModel(Bitmap bm){
         int[] intValues = new int[bm.getHeight()*bm.getWidth()];
         bm.getPixels(intValues, 0, bm.getWidth(), 0, 0, bm.getWidth(), bm.getHeight());
         float[] floatValues = new float[intValues.length * 3];
@@ -48,6 +50,7 @@ public class Model {
 
         Log.d("Checkpoint","Get to network");
 
+
         tensorFlowInferenceInterface.fillNodeFloat(
                 INPUT_NODE, new int[] {1, bm.getWidth(), bm.getHeight(), 3}, floatValues);
         Log.d("Checkpoint","Created Input Node");
@@ -57,6 +60,7 @@ public class Model {
         Log.d("Checkpoint","Ran inference");
 
         float[] outputValues = new float[DESIRED_WIDTH * DESIRED_HEIGHT * 3];
+
 
         tensorFlowInferenceInterface.readNodeFloat(OUTPUT_NODE, outputValues);
         Log.d("Checkpoint","Read Output of Network");
@@ -73,5 +77,7 @@ public class Model {
         }
         toDraw.setPixels(colors, 0, toDraw.getWidth(), 0, 0, toDraw.getWidth(), toDraw.getHeight());
         return toDraw;
+
     }
+
 }

@@ -8,14 +8,23 @@
         android:background="@android:color/background_dark"
         tools:context="com.example.etienne.styletransferapptensorflow.ShowActivity">
 
+    <ProgressBar
+            style="?android:attr/progressBarStyleLarge"
+            android:layout_width="wrap_content"
+            android:layout_centerInParent="true"
+            android:translationZ="10dp"
+            android:layout_height="wrap_content"
+            android:id="@+id/showProgressBar"/>
     <LinearLayout
             android:orientation="vertical"
             android:layout_width="match_parent"
             android:layout_height="match_parent" android:weightSum="1">
         <ImageView
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
+                android:layout_gravity="center"
                 android:background="@drawable/image_border"
-                android:layout_height="242dp" app:srcCompat="@drawable/back_arrow" android:id="@+id/imageView5"
+                android:adjustViewBounds="true"
+                android:layout_height="242dp" app:srcCompat="@drawable/back_arrow" android:id="@+id/showImageView"
                 android:layout_weight="0.78"/>
         <LinearLayout
                 android:orientation="horizontal"
