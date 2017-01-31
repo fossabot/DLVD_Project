@@ -23,6 +23,14 @@ log_generator = "\\logs\\generator_network"
 output_generator = "\\outputs\\generator_networks"
 output_images = "\\outputs\\images"
 
+VGG_STYLE_TENSOR_1 = "import/conv1_2/Relu:0"
+VGG_STYLE_TENSOR_2 = "import/conv2_2/Relu:0"
+VGG_STYLE_TENSOR_3 = "import/conv3_2/Relu:0"
+VGG_STYLE_TENSOR_4 = "import/conv4_2/Relu:0"
+
+VGG_CONTENT_LAYER = "import/conv1_2/Relu:0"
+
+BATCH_SIZE = 4
 
 def time_to_str(time):
     t_in_min = time / 60.0
@@ -56,6 +64,7 @@ def load_image(path, between_01=False, substract_mean=False, output_size=224):
     crop_img = img[yy: yy + short_edge, xx: xx + short_edge]
     # resize to 224, 224
     resized_img = skimage.transform.resize(crop_img, (output_size, output_size))
+
     if between_01==False :
         resized_img = resized_img * 255.0
 
@@ -83,17 +92,31 @@ def save_image(path, name, images, to255=False, avg=0):
         scipy.misc.imsave(full_path + name + '_' + str(i) + '.jpg', image)
 
 
-def load_pictures_for_feed(directory_path):
+def load_pictures_for_feed(directory_path, recursive=False):
+    print("Loading pictures : " + directory_path)
     images = []
     content_images = []
     for file in os.listdir(project_path + images_path + directory_path):
         full_path = os.path.join(project_path + images_path + directory_path, file)
         if os.path.isfile(full_path) and str(file)[-4:] == '.jpg' :
-            img, avg_img = load_image(directory_path + '\\' + str(file), between_01=True, output_size=304)
+            img, avg_img = load_image(directory_path + '\\' + str(file), between_01=True, output_size=234)
+
+            if len(img.shape) < 3 or img.shape[2] != 3 :
+                print("Picture with less than 3 channels found : " + str(file) + "\t Picture will be skipped.")
+                continue
+
             images.append(img)
             img, avg_img = load_image(directory_path + '\\' + str(file), between_01=True)
             content_images.append(img)
+        else:
+            if recursive and not os.path.isfile(full_path):
+                im, con = load_pictures_for_feed(directory_path + '\\' + file)
+                for i in im:
+                    images.append(i)
+                for c in con:
+                    content_images.append(c)
 
+    print("Done. Number of pictures loaded : " + str(len(images)))
     return images, content_images
 
 def tensorshape_to_int_array(ts):
@@ -136,7 +159,7 @@ def load_gen_graph(path_to_graph_directory, meta_file_name):
 
 def create_saver(sess) :
     print("create saver")
-    saver = tf.train.Saver(tf.all_variables())
+    saver = tf.train.Saver(tf.global_variables())
     print('Done')
     return saver
 
@@ -156,24 +179,7 @@ def save_gen_checkpoint(sess, saver, path="", name="\\checkpoint.data"):
     print('Done')
 
 
-def export_gen_weights_android(sess, variables, path):
-    for v in variables:
-        make_sure_path_exists(project_path + path)
-
-        f = open(project_path + path + "\\" + str(v.name)[0:(len(str(v.name))-2)], 'w')
-        int_shape = tensorshape_to_int_array(v.get_shape())
-        shape = str(int_shape)
-        f.write(shape[1:(len(shape) - 1)])
-        f.write("\n")
-        variable = sess.run(v)
-        to_write = np.reshape(variable, np.prod(int_shape))
-        for a in to_write:
-            f.write(str(a))
-            f.write("\n")
-        f.close()
-
-
-def export_gen_graph(sess, variables_filter, variables_bias, path, name="gen_export.pb") :
+def export_gen_graph(sess, variables_filter, variables_bias, variables_scalars, path, name="gen_export.pb") :
 
     var_gen_filter_new = []
     for i in range(len(variables_filter)):
@@ -183,9 +189,13 @@ def export_gen_graph(sess, variables_filter, variables_bias, path, name="gen_exp
     for i in range(len(variables_bias)):
         var_gen_bias_new.append(sess.run(variables_bias[i]))
 
+    var_gen_scalars_new = []
+    for i in range(len(variables_scalars)):
+        var_gen_scalars_new.append(sess.run(variables_scalars[i]))
+
     to_graph = tf.Graph()
     with to_graph.as_default() as g:
-        build_gen_graph_deep(trainable=False, variables_gen_filter=var_gen_filter_new, variables_gen_bias=var_gen_bias_new, input_resolution=880)
+        build_gen_graph_deep(trainable=False, variables_gen_filter=var_gen_filter_new, variables_gen_bias=var_gen_bias_new, variables_scalars=var_gen_scalars_new, input_resolution=882)
 
         #saver = tf.train.Saver(tf.all_variables())
         make_sure_path_exists(project_path + output_generator + path)
@@ -220,8 +230,8 @@ def _weight_loss(variables_gen_filter, variables_gen_bias):
 def _conv2d(variables_gen_filter, variables_gen_bias, prev_layer, i_num_channel = 3, o_num_filter = 3, strides=[1, 1, 1, 1], filter_size=3, pad='SAME', is_trainable = True):
     var = np.sqrt(2.0 / (filter_size * filter_size * i_num_channel))
     if is_trainable:
-        W = tf.Variable(tf.random_normal([filter_size, filter_size ,i_num_channel, o_num_filter], dtype='float32', stddev=var), dtype="float32", name="W", trainable=is_trainable)
-        b = tf.Variable(tf.random_normal([o_num_filter], stddev=0.1, dtype='float32'), dtype="float32", name="b", trainable=is_trainable)
+        W = tf.Variable(tf.truncated_normal([filter_size, filter_size ,i_num_channel, o_num_filter], dtype='float32', stddev=var), dtype="float32", name="W", trainable=is_trainable)
+        b = tf.Variable(tf.truncated_normal([o_num_filter], stddev=0.1, dtype='float32'), dtype="float32", name="b", trainable=is_trainable)
         variables_gen_filter.append(W)
         variables_gen_bias.append(b)
     else:
@@ -233,21 +243,29 @@ def _conv2d(variables_gen_filter, variables_gen_bias, prev_layer, i_num_channel 
 def _fract_conv2d(variables_gen_filter, variables_gen_bias, prev_layer, strides, i_num_channel = 3, o_num_filter = 3, pad='SAME', filter_size=3, is_trainable = True):
     var = np.sqrt(2.0 / (filter_size * filter_size * i_num_channel))
     if is_trainable:
-        W = tf.Variable(tf.random_normal([filter_size,filter_size,o_num_filter, i_num_channel], dtype='float32', stddev=var), dtype="float32", name="W", trainable=is_trainable)
-        b = tf.Variable(tf.random_normal([o_num_filter], dtype='float32', stddev=0.1), dtype="float32", name="b", trainable=is_trainable)
+        W = tf.Variable(tf.truncated_normal([filter_size,filter_size,o_num_filter, i_num_channel], dtype='float32', stddev=var), dtype="float32", name="W", trainable=is_trainable)
+        b = tf.Variable(tf.truncated_normal([o_num_filter], dtype='float32', stddev=0.1), dtype="float32", name="b", trainable=is_trainable)
         variables_gen_filter.append(W)
         variables_gen_bias.append(b)
     else:
         W = tf.constant(variables_gen_filter.pop(0), dtype="float32", name="W")
         b = tf.constant(variables_gen_bias.pop(0), dtype="float32", name="b")
     shape = tensorshape_to_int_array(prev_layer.get_shape())
-    return tf.add(tf.nn.conv2d_transpose(prev_layer, W, [shape[0], 2*shape[1], 2*shape[2], o_num_filter ] , strides, padding=pad), b)
+    return tf.add(tf.nn.conv2d_transpose(prev_layer, W, [shape[0], strides[1]*shape[1], strides[2]*shape[2], o_num_filter ] , strides, padding=pad), b)
 
 
-
-def _instance_norm(x, epsilon=1e-9):
+def _instance_norm(variable_scalars, x, epsilon=1e-3, is_trainable=True):
+    batch, rows, cols, channels = [i.value for i in x.get_shape()]
     mean, var = tf.nn.moments(x, [1, 2], keep_dims=True)
-    return tf.div(tf.sub(x , mean), tf.sqrt(tf.add(var, epsilon)))
+    if is_trainable:
+        s = tf.Variable(tf.ones([channels]), dtype="float32", name="s", trainable=is_trainable)
+        z = tf.Variable(tf.zeros([channels]) , dtype="float32", name="z", trainable=is_trainable)
+        variable_scalars.append(s)
+        variable_scalars.append(z)
+    else:
+        s = tf.constant(variable_scalars.pop(0), dtype="float32", name="s")
+        z = tf.constant(variable_scalars.pop(0), dtype="float32", name="z")
+    return s * tf.div(tf.sub(x , mean), tf.sqrt(tf.add(var, epsilon))) + z
 
 
 def _clip_2x2_border(x):
@@ -258,45 +276,308 @@ def _clip_2x2_border(x):
     return tmp
 
 
-def build_gen_graph_deep(trainable = True, variables_gen_filter = [], variables_gen_bias = [], input_pictures = 1, input_resolution = 304):
+def build_gen_graph_deep(trainable = True, variables_gen_filter = [], variables_gen_bias = [], variables_scalars = [], input_pictures = 1, input_resolution = 234):
 
     if trainable :
         variables_gen_filter = []
         variables_gen_bias = []
+        variables_scalars = []
 
     graph = {}
     input_image = tf.placeholder('float32', [input_pictures, input_resolution, input_resolution, 3], name="ph_input_image")
 
-    graph['conv1_0'] = _relu(_instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, input_image, filter_size=9, o_num_filter=32, is_trainable = trainable)))
+    graph['conv1_0'] = _relu(
+                        _instance_norm(
+                            variables_scalars,
+                            _conv2d(
+                                variables_gen_filter,
+                                variables_gen_bias,
+                                input_image,
+                                filter_size=9,
+                                o_num_filter=32,
+                                is_trainable = trainable),
+                            is_trainable=trainable))
     print(graph['conv1_0'].get_shape())
 
-    graph['conv2_0'] = _instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv1_0'], strides=[1, 2, 2, 1], i_num_channel = 32, o_num_filter = 64, is_trainable = trainable))
+    graph['conv2_0'] = _instance_norm(
+                        variables_scalars,
+                        _conv2d(
+                            variables_gen_filter,
+                            variables_gen_bias,
+                            graph['conv1_0'],
+                            strides=[1, 3, 3, 1],
+                            i_num_channel = 32,
+                            o_num_filter = 64,
+                            is_trainable = trainable
+                        ),
+                        is_trainable=trainable
+    )
     print(graph['conv2_0'].get_shape())
-    graph['conv2_1'] = _relu(_instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv2_0'], strides=[1, 2, 2, 1], i_num_channel=64, o_num_filter=128, is_trainable = trainable)))
+
+    graph['conv2_1'] = _relu(
+                        _instance_norm(
+                            variables_scalars,
+                            _conv2d(
+                                variables_gen_filter,
+                                variables_gen_bias,
+                                graph['conv2_0'],
+                                strides=[1, 3, 3, 1],
+                                i_num_channel=64,
+                                o_num_filter=128,
+                                is_trainable = trainable
+                            ),
+                        is_trainable=trainable
+                        )
+    )
     print(graph['conv2_1'].get_shape())
 
-    graph['conv3_0_0'] = _relu(_instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv2_1'], i_num_channel=128, o_num_filter=128, pad='VALID', is_trainable = trainable)))
-    graph['conv3_0_1'] = tf.add(_clip_2x2_border(graph['conv2_1']), _instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv3_0_0'], i_num_channel=128, o_num_filter=128, pad='VALID', is_trainable = trainable)))
-    graph['conv3_1_0'] = _relu(_instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv3_0_1'], i_num_channel=128, o_num_filter=128, pad='VALID', is_trainable = trainable)))
-    graph['conv3_1_1'] = tf.add(_clip_2x2_border(graph['conv3_0_1']), _instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv3_1_0'], i_num_channel=128, o_num_filter=128, pad='VALID', is_trainable = trainable)))
-    graph['conv3_2_0'] = _relu(_instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv3_1_1'], i_num_channel=128, o_num_filter=128, pad='VALID', is_trainable = trainable)))
-    graph['conv3_2_1'] = tf.add(_clip_2x2_border(graph['conv3_1_1']), _instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv3_2_0'], i_num_channel=128, o_num_filter=128, pad='VALID', is_trainable = trainable)))
-    graph['conv3_3_0'] = _relu(_instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv3_2_1'], i_num_channel=128, o_num_filter=128, pad='VALID', is_trainable = trainable)))
-    graph['conv3_3_1'] = tf.add(_clip_2x2_border(graph['conv3_2_1']), _instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv3_3_0'], i_num_channel=128, o_num_filter=128, pad='VALID', is_trainable = trainable)))
-    graph['conv3_4_0'] = _relu(_instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv3_3_1'], i_num_channel=128, o_num_filter=128, pad='VALID', is_trainable = trainable)))
-    graph['conv3_4_1'] = tf.add(_clip_2x2_border(graph['conv3_3_1']), _instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv3_4_0'], i_num_channel=128, o_num_filter=128, pad='VALID', is_trainable = trainable)))
+    graph['conv3_0_0'] = _relu(
+                            _instance_norm(
+                                variables_scalars,
+                                _conv2d(variables_gen_filter, variables_gen_bias, graph['conv2_1'],
+                                        i_num_channel=128,
+                                        o_num_filter=128,
+                                        pad='SAME',
+                                        is_trainable = trainable
+                                        ),
+                                is_trainable=trainable
+                            )
+    )
+
+    graph['conv3_0_1'] = tf.add(
+                            graph['conv2_1'],
+                            _instance_norm(
+                                variables_scalars,
+                                _conv2d(
+                                    variables_gen_filter,
+                                    variables_gen_bias,
+                                    graph['conv3_0_0'],
+                                    i_num_channel=128,
+                                    o_num_filter=128,
+                                    pad='SAME',
+                                    is_trainable = trainable
+                                ),
+                                is_trainable=trainable
+                            )
+    )
+
+    graph['conv3_1_0'] = _relu(
+                            _instance_norm(
+                                variables_scalars,
+                                _conv2d(
+                                    variables_gen_filter,
+                                    variables_gen_bias,
+                                    graph['conv3_0_1'],
+                                    i_num_channel=128,
+                                    o_num_filter=128,
+                                    pad='SAME',
+                                    is_trainable = trainable
+                                ),
+                                is_trainable=trainable
+                            )
+    )
+
+    graph['conv3_1_1'] = tf.add(
+                            graph['conv3_0_1'],
+                            _instance_norm(
+                                variables_scalars,
+                                _conv2d(
+                                    variables_gen_filter,
+                                    variables_gen_bias,
+                                    graph['conv3_1_0'],
+                                    i_num_channel=128,
+                                    o_num_filter=128,
+                                    pad='SAME',
+                                    is_trainable = trainable
+                                ),
+                                is_trainable=trainable
+                            )
+    )
+
+    graph['conv3_2_0'] = _relu(
+                            _instance_norm(
+                                variables_scalars,
+                                _conv2d(
+                                    variables_gen_filter,
+                                    variables_gen_bias,
+                                    graph['conv3_1_1'],
+                                    i_num_channel=128,
+                                    o_num_filter=128,
+                                    pad='SAME',
+                                    is_trainable = trainable
+                                ),
+                                is_trainable=trainable
+                            )
+    )
+
+    graph['conv3_2_1'] = tf.add(graph['conv3_1_1'],
+                                _instance_norm(
+                                    variables_scalars,
+                                    _conv2d(
+                                        variables_gen_filter,
+                                        variables_gen_bias,
+                                        graph['conv3_2_0'],
+                                        i_num_channel=128,
+                                        o_num_filter=128,
+                                        pad='SAME',
+                                        is_trainable = trainable
+                                    ),
+                                is_trainable=trainable
+                                )
+    )
+
+    graph['conv3_3_0'] = _relu(
+                            _instance_norm(
+                                variables_scalars,
+                                _conv2d(
+                                    variables_gen_filter,
+                                    variables_gen_bias,
+                                    graph['conv3_2_1'],
+                                    i_num_channel=128,
+                                    o_num_filter=128,
+                                    pad='SAME',
+                                    is_trainable = trainable
+                                ),
+                                is_trainable=trainable
+                            )
+    )
+
+    graph['conv3_3_1'] = tf.add(graph['conv3_2_1'],
+                                _instance_norm(
+                                    variables_scalars,
+                                    _conv2d(
+                                        variables_gen_filter,
+                                        variables_gen_bias,
+                                        graph['conv3_3_0'],
+                                        i_num_channel=128,
+                                        o_num_filter=128,
+                                        pad='SAME',
+                                        is_trainable = trainable
+                                    ),
+                                    is_trainable=trainable
+                                )
+    )
+
+    graph['conv3_4_0'] = _relu(
+                            _instance_norm(
+                                variables_scalars,
+                                _conv2d(
+                                    variables_gen_filter,
+                                    variables_gen_bias,
+                                    graph['conv3_3_1'],
+                                    i_num_channel=128,
+                                    o_num_filter=128,
+                                    pad='SAME',
+                                    is_trainable = trainable
+                                ),
+                                is_trainable=trainable
+                            )
+    )
+
+    graph['conv3_4_1'] = tf.add(graph['conv3_3_1'],
+                                _instance_norm(
+                                    variables_scalars,
+                                    _conv2d(
+                                        variables_gen_filter,
+                                        variables_gen_bias,
+                                        graph['conv3_4_0'],
+                                        i_num_channel=128,
+                                        o_num_filter=128,
+                                        pad='SAME',
+                                        is_trainable = trainable
+                                    ),
+                                    is_trainable=trainable
+                                )
+    )
     print(graph['conv3_4_1'].get_shape())
 
-    graph['conv4_0'] = _instance_norm(_fract_conv2d(variables_gen_filter, variables_gen_bias, graph['conv3_4_1'], [1, 2, 2, 1], i_num_channel=128, o_num_filter=64, is_trainable = trainable))
+    graph['conv4_0'] = _instance_norm(
+                        variables_scalars,
+                        _fract_conv2d(
+                            variables_gen_filter,
+                            variables_gen_bias,
+                            graph['conv3_4_1'],
+                            [1, 3, 3, 1],
+                            i_num_channel=128,
+                            o_num_filter=64,
+                            is_trainable = trainable
+                        ),
+                        is_trainable=trainable
+    )
     print(graph['conv4_0'].get_shape())
-    graph['conv4_1'] = _relu(_instance_norm(_fract_conv2d(variables_gen_filter, variables_gen_bias, graph['conv4_0'], [1, 2, 2, 1], i_num_channel=64, o_num_filter=32, is_trainable = trainable)))
+
+    graph['conv4_1'] = _relu(
+                        _instance_norm(
+                            variables_scalars,
+                            _fract_conv2d(
+                                variables_gen_filter,
+                                variables_gen_bias,
+                                graph['conv4_0'],
+                                [1, 3, 3, 1],
+                                i_num_channel=64,
+                                o_num_filter=32,
+                                is_trainable = trainable
+                            ),
+                            is_trainable=trainable
+                        )
+    )
     print(graph['conv4_1'].get_shape())
 
-    graph['conv5_0'] = _relu(_instance_norm(_conv2d(variables_gen_filter, variables_gen_bias, graph['conv4_1'], i_num_channel=32, o_num_filter=3, filter_size=9, is_trainable = trainable)))
+    graph['conv5_0'] = _relu(
+                        _instance_norm(
+                            variables_scalars,
+                            _conv2d(
+                                variables_gen_filter,
+                                variables_gen_bias,
+                                graph['conv4_1'],
+                                i_num_channel=32,
+                                o_num_filter=3,
+                                filter_size=9,
+                                is_trainable = trainable
+                            ),
+                            is_trainable=trainable
+                        )
+    )
 
     graph['output'] = tf.tanh(graph['conv5_0'], name='output')
 
-    return graph, input_image, variables_gen_filter, variables_gen_bias
+    return graph, input_image, variables_gen_filter, variables_gen_bias, variables_scalars
+
+
+def precompute_style_gram(style_image):
+    print("Precompute style tensors")
+    graph = tf.Graph()
+    with graph.as_default() as g:
+        inp = tf.placeholder("float32", [None, 224, 224, 3])
+        load_vgg_input(inp)
+
+        tensor_conv1_1 = graph.get_tensor_by_name(VGG_STYLE_TENSOR_1)
+        tensor_conv2_1 = graph.get_tensor_by_name(VGG_STYLE_TENSOR_2)
+        tensor_conv3_1 = graph.get_tensor_by_name(VGG_STYLE_TENSOR_3)
+        tensor_conv4_1 = graph.get_tensor_by_name(VGG_STYLE_TENSOR_4)
+
+        tensor_style_gram1_1 = calc_gram(tensor_conv1_1[0])
+        tensor_style_gram2_1 = calc_gram(tensor_conv2_1[0])
+        tensor_style_gram3_1 = calc_gram(tensor_conv3_1[0])
+        tensor_style_gram4_1 = calc_gram(tensor_conv4_1[0])
+
+        feed = {}
+        feed[inp] = style_image.reshape(1, 224, 224, 3)
+        with tf.Session() as sess :
+            gram_1 = sess.run(tensor_style_gram1_1, feed_dict=feed)
+            gram_2 = sess.run(tensor_style_gram2_1, feed_dict=feed)
+            gram_3 = sess.run(tensor_style_gram3_1, feed_dict=feed)
+            gram_4 = sess.run(tensor_style_gram4_1, feed_dict=feed)
+
+        # tensor_conv = graph.get_tensor_by_name(VGG_CONTENT_LAYER)
+        #
+        # feed = {}
+        # feed[inp] = content_images
+        # with tf.Session() as sess:
+        #     content = sess.run(tensor_conv, feed_dict=feed)
+
+    print("Done")
+    return [gram_1, gram_2, gram_3, gram_4]
 
 
 def calc_gram(single_picture_tensor_conv):
@@ -306,29 +587,26 @@ def calc_gram(single_picture_tensor_conv):
     return tf.matmul(tf.transpose(tensor_conv_reshape), tensor_conv_reshape)
 
 
-def calc_content_loss(graph, layer = "import/conv1_2/Relu:0"):
-    tensor_conv = graph.get_tensor_by_name(layer)
-    amount_pictures = int((tensorshape_to_int_array(tensor_conv.get_shape())[0] - 1) / 2)
+def calc_content_loss(graph):
+    tensor_conv = graph.get_tensor_by_name(VGG_CONTENT_LAYER)
+
+    amount_pictures = int(tensorshape_to_int_array(tensor_conv.get_shape())[0] / 2.0)
+
     content_l = 0.0
     for i in range(amount_pictures) :
         content_l += tf.reduce_sum(tf.square(tensor_conv[i] - tensor_conv[i + amount_pictures]), name='content_loss')
     return content_l
 
 
-def calc_gen_content_loss(gen, original):
-    content_loss = tf.reduce_mean(tf.square(gen - original), name='content_loss')
-    return content_loss
-
-
-def calc_style_loss_64(graph):
-    tensor_conv1_1 = graph.get_tensor_by_name("import/conv1_2/Relu:0")
-    tensor_conv2_1 = graph.get_tensor_by_name("import/conv2_2/Relu:0")
-    tensor_conv3_1 = graph.get_tensor_by_name("import/conv3_2/Relu:0")
-    tensor_conv4_1 = graph.get_tensor_by_name("import/conv4_2/Relu:0")
+def calc_style_loss_64(graph, precomputed_style_grams):
+    tensor_conv1_1 = graph.get_tensor_by_name(VGG_STYLE_TENSOR_1)
+    tensor_conv2_1 = graph.get_tensor_by_name(VGG_STYLE_TENSOR_2)
+    tensor_conv3_1 = graph.get_tensor_by_name(VGG_STYLE_TENSOR_3)
+    tensor_conv4_1 = graph.get_tensor_by_name(VGG_STYLE_TENSOR_4)
     #tensor_conv5_1 = graph.get_tensor_by_name("import/conv5_2/Relu:0")
 
-    dim_zero_elem = tensorshape_to_int_array(tensor_conv1_1.get_shape())[0]
-    amount_pictures = int((dim_zero_elem - 1) / 2)
+    amount_pictures = int(tensorshape_to_int_array(tensor_conv1_1.get_shape())[0] / 2.0)
+
 
     style_l = 0.0
     for i in range(amount_pictures):
@@ -339,10 +617,10 @@ def calc_style_loss_64(graph):
         tensor_gen_gram4_1 = calc_gram(tensor_conv4_1[i])
         #tensor_gen_gram5_1 = calc_gram(tensor_conv5_1[0])
 
-        tensor_style_gram1_1 = calc_gram(tensor_conv1_1[dim_zero_elem - 1])
-        tensor_style_gram2_1 = calc_gram(tensor_conv2_1[dim_zero_elem - 1])
-        tensor_style_gram3_1 = calc_gram(tensor_conv3_1[dim_zero_elem - 1])
-        tensor_style_gram4_1 = calc_gram(tensor_conv4_1[dim_zero_elem - 1])
+        tensor_style_gram1_1 = precomputed_style_grams[0]
+        tensor_style_gram2_1 = precomputed_style_grams[1]
+        tensor_style_gram3_1 = precomputed_style_grams[2]
+        tensor_style_gram4_1 = precomputed_style_grams[3]
         #tensor_style_gram5_1 = calc_gram(tensor_conv5_1[2])
 
         s = tensorshape_to_int_array(tensor_conv1_1.get_shape())
@@ -379,49 +657,43 @@ def calc_style_loss_64(graph):
     return style_l
 
 
-def calc_black_loss(gen_image):
-
-    x = 1.0 - gen_image
-    x = tf.reduce_prod(x, axis=3)
-
-    x = tf.nn.relu(tf.sub(x, 0.5))
-    return tf.reduce_sum(x)
-
-
 def main():
 
-    input_images, content_input_images = load_pictures_for_feed("\\batch")
-    input_images_len = len(input_images)
-
+    input_images, content_input_images = load_pictures_for_feed("\\batch", recursive=True)
     style_red, avg_style_red = load_image("\\styles\\style.jpg", between_01=True, substract_mean=False)
-    #style_blue, avg_style_blue = load_image("\\styles\\style2.jpg", between_01=True, substract_mean=False)
 
+    style_grams = precompute_style_gram(style_red)
 
-    gen_graph, input_image, variables_gen_filter, variables_gen_bias = build_gen_graph_deep(input_pictures=input_images_len)
+    gen_graph, input_image, variables_gen_filter, variables_gen_bias, variables_scalars = build_gen_graph_deep(input_pictures=BATCH_SIZE)
     gen_image = gen_graph['output']
 
     style_image = tf.placeholder('float32', [1, 224, 224,3], name="style_image")
-    content_input = tf.placeholder('float32', [input_images_len, 224, 224,3], name="content_image")
+    content_input = tf.placeholder('float32', [BATCH_SIZE, 224, 224,3], name="content_image")
 
-    batch = gen_image
+    batch = tf.slice(gen_image, [0, 4, 4, 0], [-1, 224, 224, -1])
     batch = tf.concat(0, [batch, content_input])
-    batch = tf.concat(0, [batch, style_image])
 
     graph = load_vgg_input(batch)
 
-    content_loss = 0.01 * calc_content_loss(graph)
-    style_loss = calc_style_loss_64(graph)
-    #black_loss = 10000000 * calc_black_loss(gen_image)
+    content_loss = 0.001 * calc_content_loss(graph)
+    style_loss = calc_style_loss_64(graph, style_grams)
     loss = content_loss + style_loss
 
     learning_rate = 0.001;
     var_learning_rate = tf.placeholder("float32")
 
+    image_counter = 0
+    assert len(input_images) >= BATCH_SIZE
+
     feed = {}
-    feed[input_image] = input_images
-    feed[content_input] = content_input_images
+    feed[input_image] = input_images[image_counter : image_counter + BATCH_SIZE]
+    feed[content_input] = content_input_images[image_counter : image_counter + BATCH_SIZE]
     feed[style_image] = style_red.reshape(1, 224, 224,3)
     feed[var_learning_rate] = learning_rate;
+
+    image_counter = (image_counter + 4) % len(input_images)
+    if image_counter + 4 > len(input_images) :
+        image_counter = 0
 
     with tf.Session() as sess:
 
@@ -430,10 +702,10 @@ def main():
 
 
 
-        #optimizer = tf.train.MomentumOptimizer(0.0001, 0.9)
+        #optimizer = tf.train.MomentumOptimizer(learning_rate=var_learning_rate, momentum=0.9)
         optimizer = tf.train.AdamOptimizer(learning_rate=var_learning_rate)
         #optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.5)
-        variables = variables_gen_filter + variables_gen_bias
+        variables = variables_gen_filter + variables_gen_bias + variables_scalars
         train_step = optimizer.minimize(loss, var_list=variables)
 
         print('number of variables : ' + str(len(tf.trainable_variables())));
@@ -442,12 +714,12 @@ def main():
         sess.run(init, feed)
 
 
-        loading_directory = "\\version_46_k"
-        saving_directory = "\\version_46_k"
-        starting_pic_num = 4250
+        loading_directory = "\\version_49_k"
+        saving_directory = "\\version_49_k"
+        starting_pic_num = 0
 
         saver = create_saver(sess)
-        load_gen_last_checkpoint(sess, saver, path=loading_directory)
+        #load_gen_last_checkpoint(sess, saver, path=loading_directory)
 
 
         i = 0
@@ -461,33 +733,36 @@ def main():
         last_training_checkpoint_time = start_training_time
 
         neg_loss_counter = 0
-        pos_loss_counter = 0
+        avoid_save_loss = -1.0;
+
         restore= False
+        last_saved_iteration = 0
         for i in range(5000):
-            if(i % 10 == 0) :
+            if(i % 10 == 0):
                 print(i)
 
             if i % 250 == 0:
                 l = sess.run(loss, feed_dict=feed)
 
-                if (last_l -l ) < 0 and i != 0:
+                if (last_l - l ) < 0 and i != 0:
+                    avoid_save_loss = last_l
                     neg_loss_counter += 1
                     print('neg loss -> counter increase :' + str(neg_loss_counter))
-                    if neg_loss_counter == 2 :
-                        learning_rate /= 2.0
+                    if neg_loss_counter == 3 :
+                        learning_rate /= 10.0
                         neg_loss_counter = 0
-                        pos_loss_counter = 0
                         restore = True
                         print('neg loss -> reset counters to 0')
                         print("new learning rate : " + str(learning_rate))
                 else:
-                    if neg_loss_counter != 0 :
-                        pos_loss_counter += 1
-                        print('pos loss -> counter increase :' + str(pos_loss_counter))
-                        if pos_loss_counter == 2 :
-                            neg_loss_counter = 0
-                            pos_loss_counter = 0
-                            print('pos loss -> reset counters to 0')
+                    if avoid_save_loss != -1.0 :
+                        if l < avoid_save_loss:
+                            avoid_save_loss = -1.0
+                            neg_loss_counter = 0;
+                            print("loss reached best result again")
+                            print("reset counter to 0")
+                        else:
+                            print("avoid saving until loss becomes smaller again:" + str(l - avoid_save_loss))
 
                 print('learning rate : ' + str(learning_rate))
 
@@ -521,21 +796,34 @@ def main():
 
                 save_image(saving_directory, '\\im' + str(i + starting_pic_num), sess.run(gen_image, feed_dict=feed), to255=True)
 
-                if restore == False :
-                    if neg_loss_counter == 0 :
+                if restore == False:
+                    if avoid_save_loss == -1 :
                         save_gen_checkpoint(sess, saver, path=saving_directory)
-                else :
-                    print("Restoring last checkpoint")
+                        last_saved_iteration = i
+                else:
+                    print("Restoring last checkpoint -> iteration : " + str(last_saved_iteration))
                     load_gen_last_checkpoint(sess, saver, path=saving_directory)
                     restore = False
-                    print("Done")
 
             sess.run(train_step, feed_dict=feed)
 
+            feed[input_image] = input_images[image_counter : image_counter + BATCH_SIZE]
+            feed[content_input] = content_input_images[image_counter: image_counter + BATCH_SIZE]
+
+            image_counter = (image_counter + 4) % len(input_images)
+            if image_counter + 4 > len(input_images):
+                image_counter = 0
+
         save_image(saving_directory, '\\im' + str(i + starting_pic_num + 1), sess.run(gen_image, feed_dict=feed), to255=True)
         print(sess.run(loss, feed_dict=feed))
-        save_gen_checkpoint(sess, saver, path=saving_directory)
-        export_gen_graph(sess, variables_gen_filter, variables_gen_bias, saving_directory)
+        if avoid_save_loss == -1:
+            save_gen_checkpoint(sess, saver, path=saving_directory)
+            export_gen_graph(sess, variables_gen_filter, variables_gen_bias, variables_scalars, saving_directory)
+        else:
+            print("Restoring last checkpoint -> iteration : " + str(last_saved_iteration))
+            load_gen_last_checkpoint(sess, saver, path=saving_directory)
+            print("export pb-File")
+            export_gen_graph(sess, variables_gen_filter, variables_gen_bias, variables_scalars, saving_directory)
 
 
 def test_android_gen():
