@@ -8,6 +8,7 @@ import skimage.io
 import skimage.transform
 import numpy as np
 import os
+import random
 
 
 project_path = "C:\\Users\\ken\\uni\\05_UNI_WS_16-17\\Visual_Data\\DLVD_Project\\StyleTransfer"
@@ -32,6 +33,8 @@ VGG_CONTENT_LAYER = "import/conv1_2/Relu:0"
 
 BATCH_SIZE = 4
 PRECOMPUTE_BATCH_SIZE = 20
+
+SEED = 448
 
 def time_to_str(time):
     t_in_min = time / 60.0
@@ -683,6 +686,13 @@ def calc_style_loss_64(graph, precomputed_style_grams):
 def main():
 
     input_images, content_input_images = load_pictures_for_feed("\\batch", recursive=True)
+
+    print("Shuffle inputs")
+    random.seed(SEED)
+    random.shuffle(input_images)
+    random.shuffle(content_input_images)
+    print("Done")
+
     style_red, avg_style_red = load_image("\\styles\\style.jpg", between_01=True, substract_mean=False)
 
     pre_style_grams, pre_content_tensor = precompute_style_gram(style_red, content_input_images)
@@ -724,8 +734,6 @@ def main():
         # set log directory
         #summary_writer = tf.train.SummaryWriter(project_path + log_train,graph_def=sess.graph_def)
 
-
-
         #optimizer = tf.train.MomentumOptimizer(learning_rate=var_learning_rate, momentum=0.9)
         optimizer = tf.train.AdamOptimizer(learning_rate=var_learning_rate)
         #optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.5)
@@ -740,7 +748,7 @@ def main():
 
         loading_directory = "\\version_50_k"
         saving_directory = "\\version_50_k"
-        starting_pic_num = 0
+        starting_pic_num = 1000
 
         saver = create_saver(sess)
         load_gen_last_checkpoint(sess, saver, path=loading_directory)
@@ -865,22 +873,22 @@ def export_checkpoint_to_android():
         saver = create_saver(sess)
         load_gen_last_checkpoint(sess, saver, path=loading_directory)
 
-        export_gen_graph(sess, variables_gen_filter, variables_gen_bias, variables_scalars, saving_directory, name="gen_export_270.pb", resolution=270)
+        export_gen_graph(sess, variables_gen_filter, variables_gen_bias, variables_scalars, saving_directory, name="gen_export_630.pb", resolution=630)
 
 
 def test_android_gen():
-    full_path = output_generator + '\\checkStyleContent_20_plus_43_k'
+    full_path = output_generator + '\\version_50_k'
 
-    cat_gen, avg_cat_gen = load_image("\\cat.jpg", between_01=True, substract_mean=False, output_size=304)
+    cat_gen, avg_cat_gen = load_image("\\cat.jpg", between_01=True, substract_mean=False, output_size=450)
 
     print('load generator')
-    with open(project_path + full_path + '\\gen_export.pb', mode='rb') as f:
+    with open(project_path + full_path + '\\gen_export_450.pb', mode='rb') as f:
         fileContent = f.read()
 
     graph_def = tf.GraphDef()
     graph_def.ParseFromString(fileContent)
 
-    input_image = tf.placeholder("float32", (1, 304, 304, 3), "input")
+    input_image = tf.placeholder("float32", (1, 450, 450, 3), "input")
     tf.import_graph_def(graph_def, input_map={"ph_input_image": input_image})
     # print("graph loaded from disk")
     print('Done')
@@ -888,7 +896,7 @@ def test_android_gen():
     output = tf.get_default_graph().get_tensor_by_name('import/output:0')
 
     feed = {}
-    feed[input_image] = cat_gen.reshape(1, 304, 304, 3)
+    feed[input_image] = cat_gen.reshape(1, 450, 450, 3)
 
     with tf.Session() as sess :
         init = tf.global_variables_initializer()
