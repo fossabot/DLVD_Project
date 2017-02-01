@@ -31,6 +31,7 @@ VGG_STYLE_TENSOR_4 = "import/conv4_2/Relu:0"
 VGG_CONTENT_LAYER = "import/conv1_2/Relu:0"
 
 BATCH_SIZE = 4
+PRECOMPUTE_BATCH_SIZE = 20
 
 def time_to_str(time):
     t_in_min = time / 60.0
@@ -179,7 +180,7 @@ def save_gen_checkpoint(sess, saver, path="", name="\\checkpoint.data"):
     print('Done')
 
 
-def export_gen_graph(sess, variables_filter, variables_bias, variables_scalars, path, name="gen_export.pb") :
+def export_gen_graph(sess, variables_filter, variables_bias, variables_scalars, path, name="gen_export_882.pb") :
 
     var_gen_filter_new = []
     for i in range(len(variables_filter)):
@@ -544,7 +545,7 @@ def build_gen_graph_deep(trainable = True, variables_gen_filter = [], variables_
     return graph, input_image, variables_gen_filter, variables_gen_bias, variables_scalars
 
 
-def precompute_style_gram(style_image):
+def precompute_style_gram(style_image, content_images):
     print("Precompute style tensors")
     graph = tf.Graph()
     with graph.as_default() as g:
@@ -569,15 +570,34 @@ def precompute_style_gram(style_image):
             gram_3 = sess.run(tensor_style_gram3_1, feed_dict=feed)
             gram_4 = sess.run(tensor_style_gram4_1, feed_dict=feed)
 
-        # tensor_conv = graph.get_tensor_by_name(VGG_CONTENT_LAYER)
-        #
-        # feed = {}
-        # feed[inp] = content_images
-        # with tf.Session() as sess:
-        #     content = sess.run(tensor_conv, feed_dict=feed)
+        tensor_conv = graph.get_tensor_by_name(VGG_CONTENT_LAYER)
+
+        feed = {}
+        content = []
+        counter = 0
+        batch_size = PRECOMPUTE_BATCH_SIZE
+        brek_now = False
+        while True :
+            if counter % 10 == 0:
+                print("Number of pictures already computed : " + str(counter))
+
+            if counter + batch_size > len(content_images):
+                batch_size = len(content_images) - counter
+                brek_now = True
+
+            feed[inp] = content_images[counter : counter + batch_size]
+
+            counter += batch_size
+            with tf.Session() as sess:
+                x = sess.run(tensor_conv, feed_dict=feed)
+                for i in range(len(x)):
+                    content.append(x[i])
+
+            if brek_now:
+                break;
 
     print("Done")
-    return [gram_1, gram_2, gram_3, gram_4]
+    return [gram_1, gram_2, gram_3, gram_4], content
 
 
 def calc_gram(single_picture_tensor_conv):
@@ -587,14 +607,17 @@ def calc_gram(single_picture_tensor_conv):
     return tf.matmul(tf.transpose(tensor_conv_reshape), tensor_conv_reshape)
 
 
-def calc_content_loss(graph):
+def calc_content_loss(graph, content_input):
     tensor_conv = graph.get_tensor_by_name(VGG_CONTENT_LAYER)
 
-    amount_pictures = int(tensorshape_to_int_array(tensor_conv.get_shape())[0] / 2.0)
+    #amount_pictures = int(tensorshape_to_int_array(tensor_conv.get_shape())[0] / 2.0)
+    amount_pictures = tensorshape_to_int_array(tensor_conv.get_shape())[0]
 
     content_l = 0.0
     for i in range(amount_pictures) :
-        content_l += tf.reduce_sum(tf.square(tensor_conv[i] - tensor_conv[i + amount_pictures]), name='content_loss')
+        #content_l += tf.reduce_sum(tf.square(tensor_conv[i] - tensor_conv[i + amount_pictures]), name='content_loss')
+        content_l += tf.reduce_sum(tf.square(tensor_conv[i] - content_input[i]), name='content_loss')
+
     return content_l
 
 
@@ -605,8 +628,8 @@ def calc_style_loss_64(graph, precomputed_style_grams):
     tensor_conv4_1 = graph.get_tensor_by_name(VGG_STYLE_TENSOR_4)
     #tensor_conv5_1 = graph.get_tensor_by_name("import/conv5_2/Relu:0")
 
-    amount_pictures = int(tensorshape_to_int_array(tensor_conv1_1.get_shape())[0] / 2.0)
-
+    #amount_pictures = int(tensorshape_to_int_array(tensor_conv1_1.get_shape())[0] / 2.0)
+    amount_pictures = tensorshape_to_int_array(tensor_conv1_1.get_shape())[0]
 
     style_l = 0.0
     for i in range(amount_pictures):
@@ -662,24 +685,24 @@ def main():
     input_images, content_input_images = load_pictures_for_feed("\\batch", recursive=True)
     style_red, avg_style_red = load_image("\\styles\\style.jpg", between_01=True, substract_mean=False)
 
-    style_grams = precompute_style_gram(style_red)
+    pre_style_grams, pre_content_tensor = precompute_style_gram(style_red, content_input_images)
 
     gen_graph, input_image, variables_gen_filter, variables_gen_bias, variables_scalars = build_gen_graph_deep(input_pictures=BATCH_SIZE)
     gen_image = gen_graph['output']
 
-    style_image = tf.placeholder('float32', [1, 224, 224,3], name="style_image")
-    content_input = tf.placeholder('float32', [BATCH_SIZE, 224, 224,3], name="content_image")
+    #style_image = tf.placeholder('float32', [1, 224, 224,3], name="style_image")
+    content_layer = tf.placeholder('float32', [BATCH_SIZE, 224, 224,64], name="content_layer")
 
     batch = tf.slice(gen_image, [0, 4, 4, 0], [-1, 224, 224, -1])
-    batch = tf.concat(0, [batch, content_input])
+    #batch = tf.concat(0, [batch, content_input])
 
     graph = load_vgg_input(batch)
 
-    content_loss = 0.001 * calc_content_loss(graph)
-    style_loss = calc_style_loss_64(graph, style_grams)
+    content_loss = 7.5 * calc_content_loss(graph, content_layer)
+    style_loss = 1e2 * calc_style_loss_64(graph, pre_style_grams)
     loss = content_loss + style_loss
 
-    learning_rate = 0.001;
+    learning_rate = 0.001
     var_learning_rate = tf.placeholder("float32")
 
     image_counter = 0
@@ -687,9 +710,10 @@ def main():
 
     feed = {}
     feed[input_image] = input_images[image_counter : image_counter + BATCH_SIZE]
-    feed[content_input] = content_input_images[image_counter : image_counter + BATCH_SIZE]
-    feed[style_image] = style_red.reshape(1, 224, 224,3)
-    feed[var_learning_rate] = learning_rate;
+    #feed[content_input] = content_input_images[image_counter : image_counter + BATCH_SIZE]
+    feed[content_layer] = pre_content_tensor[image_counter: image_counter + BATCH_SIZE]
+    # feed[style_image] = style_red.reshape(1, 224, 224,3)
+    feed[var_learning_rate] = learning_rate
 
     image_counter = (image_counter + 4) % len(input_images)
     if image_counter + 4 > len(input_images) :
@@ -714,9 +738,9 @@ def main():
         sess.run(init, feed)
 
 
-        loading_directory = "\\version_49_k"
-        saving_directory = "\\version_49_k"
-        starting_pic_num = 1500
+        loading_directory = "\\version_50_k"
+        saving_directory = "\\version_50_k"
+        starting_pic_num = 0
 
         saver = create_saver(sess)
         load_gen_last_checkpoint(sess, saver, path=loading_directory)
@@ -737,7 +761,7 @@ def main():
 
         restore= False
         last_saved_iteration = 0
-        for i in range(5000):
+        for i in range(0):
             if(i % 10 == 0):
                 print(i)
 
@@ -808,7 +832,7 @@ def main():
             sess.run(train_step, feed_dict=feed)
 
             feed[input_image] = input_images[image_counter : image_counter + BATCH_SIZE]
-            feed[content_input] = content_input_images[image_counter: image_counter + BATCH_SIZE]
+            feed[content_layer] = pre_content_tensor[image_counter: image_counter + BATCH_SIZE]
 
             image_counter = (image_counter + 4) % len(input_images)
             if image_counter + 4 > len(input_images):
