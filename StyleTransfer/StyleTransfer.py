@@ -180,7 +180,7 @@ def save_gen_checkpoint(sess, saver, path="", name="\\checkpoint.data"):
     print('Done')
 
 
-def export_gen_graph(sess, variables_filter, variables_bias, variables_scalars, path, name="gen_export_882.pb") :
+def export_gen_graph(sess, variables_filter, variables_bias, variables_scalars, path, name="gen_export_540.pb") :
 
     var_gen_filter_new = []
     for i in range(len(variables_filter)):
@@ -196,7 +196,7 @@ def export_gen_graph(sess, variables_filter, variables_bias, variables_scalars, 
 
     to_graph = tf.Graph()
     with to_graph.as_default() as g:
-        build_gen_graph_deep(trainable=False, variables_gen_filter=var_gen_filter_new, variables_gen_bias=var_gen_bias_new, variables_scalars=var_gen_scalars_new, input_resolution=882)
+        build_gen_graph_deep(trainable=False, variables_gen_filter=var_gen_filter_new, variables_gen_bias=var_gen_bias_new, variables_scalars=var_gen_scalars_new, input_resolution=540)
 
         #saver = tf.train.Saver(tf.all_variables())
         make_sure_path_exists(project_path + output_generator + path)
@@ -850,6 +850,24 @@ def main():
             export_gen_graph(sess, variables_gen_filter, variables_gen_bias, variables_scalars, saving_directory)
 
 
+def export_checkpoint_to_android():
+
+    gen_graph, input_image, variables_gen_filter, variables_gen_bias, variables_scalars = build_gen_graph_deep(
+        input_pictures=BATCH_SIZE)
+
+    loading_directory = "\\version_50_k"
+    saving_directory = "\\version_50_k"
+
+    with tf.Session() as sess:
+        init = tf.global_variables_initializer()
+        sess.run(init)
+
+        saver = create_saver(sess)
+        load_gen_last_checkpoint(sess, saver, path=loading_directory)
+
+        export_gen_graph(sess, variables_gen_filter, variables_gen_bias, variables_scalars, saving_directory)
+
+
 def test_android_gen():
     full_path = output_generator + '\\checkStyleContent_20_plus_43_k'
 
@@ -879,6 +897,7 @@ def test_android_gen():
         save_image('\\generator_load', '\\test', x, True)
 
 
-main()
+#main()
 #transform(np.reshape(elch, [1,224,224,3]), '\\tmp\\checkStyleContent_10_plus_12', '\\checkpoint.data.meta', '\\style_10_plus_12', '\\elch.jpg')
+export_checkpoint_to_android()
 #test_android_gen()
