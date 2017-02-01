@@ -180,7 +180,7 @@ def save_gen_checkpoint(sess, saver, path="", name="\\checkpoint.data"):
     print('Done')
 
 
-def export_gen_graph(sess, variables_filter, variables_bias, variables_scalars, path, name="gen_export_540.pb") :
+def export_gen_graph(sess, variables_filter, variables_bias, variables_scalars, path, name="gen_export.pb", resolution=360) :
 
     var_gen_filter_new = []
     for i in range(len(variables_filter)):
@@ -196,7 +196,7 @@ def export_gen_graph(sess, variables_filter, variables_bias, variables_scalars, 
 
     to_graph = tf.Graph()
     with to_graph.as_default() as g:
-        build_gen_graph_deep(trainable=False, variables_gen_filter=var_gen_filter_new, variables_gen_bias=var_gen_bias_new, variables_scalars=var_gen_scalars_new, input_resolution=540)
+        build_gen_graph_deep(trainable=False, variables_gen_filter=var_gen_filter_new, variables_gen_bias=var_gen_bias_new, variables_scalars=var_gen_scalars_new, input_resolution=resolution)
 
         #saver = tf.train.Saver(tf.all_variables())
         make_sure_path_exists(project_path + output_generator + path)
@@ -865,7 +865,7 @@ def export_checkpoint_to_android():
         saver = create_saver(sess)
         load_gen_last_checkpoint(sess, saver, path=loading_directory)
 
-        export_gen_graph(sess, variables_gen_filter, variables_gen_bias, variables_scalars, saving_directory)
+        export_gen_graph(sess, variables_gen_filter, variables_gen_bias, variables_scalars, saving_directory, name="gen_graph_450.pb", resolution=450)
 
 
 def test_android_gen():
