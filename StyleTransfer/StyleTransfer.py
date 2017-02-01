@@ -873,7 +873,7 @@ def export_checkpoint_to_android():
         saver = create_saver(sess)
         load_gen_last_checkpoint(sess, saver, path=loading_directory)
 
-        export_gen_graph(sess, variables_gen_filter, variables_gen_bias, variables_scalars, saving_directory, name="gen_export_630.pb", resolution=630)
+        export_gen_graph(sess, variables_gen_filter, variables_gen_bias, variables_scalars, saving_directory, name="gen_export_720.pb", resolution=720)
 
 
 def test_android_gen():
