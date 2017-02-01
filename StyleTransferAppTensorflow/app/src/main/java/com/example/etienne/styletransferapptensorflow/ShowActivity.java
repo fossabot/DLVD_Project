@@ -42,6 +42,8 @@ public class ShowActivity extends AppCompatActivity {
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         }
+
+        image = Bitmap.createScaledBitmap(image,882,882,false);
         imageView.setImageBitmap(image);
 
         items = new ArrayList<>();

@@ -15,8 +15,8 @@ public class Model {
     private static String MODEL_FILE;
     private static final String INPUT_NODE = "ph_input_image";
     private static final String OUTPUT_NODE = "output";
-    private static final int DESIRED_HEIGHT = 224;
-    private static final int DESIRED_WIDTH = 224;
+    private static final int DESIRED_HEIGHT = 800;
+    private static final int DESIRED_WIDTH = 800;
     private AssetManager am;
 
     TensorFlowInferenceInterface tensorFlowInferenceInterface;
