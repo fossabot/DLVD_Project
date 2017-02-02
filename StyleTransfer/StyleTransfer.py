@@ -769,7 +769,7 @@ def main():
 
         restore= False
         last_saved_iteration = 0
-        for i in range(0):
+        for i in range(5000):
             if(i % 10 == 0):
                 print(i)
 
@@ -873,7 +873,7 @@ def export_checkpoint_to_android():
         saver = create_saver(sess)
         load_gen_last_checkpoint(sess, saver, path=loading_directory)
 
-        export_gen_graph(sess, variables_gen_filter, variables_gen_bias, variables_scalars, saving_directory, name="gen_export_720.pb", resolution=720)
+        export_gen_graph(sess, variables_gen_filter, variables_gen_bias, variables_scalars, saving_directory, name="gen_export_630.pb", resolution=630)
 
 
 def test_android_gen():
@@ -905,7 +905,7 @@ def test_android_gen():
         save_image('\\generator_load', '\\test', x, True)
 
 
-#main()
+main()
 #transform(np.reshape(elch, [1,224,224,3]), '\\tmp\\checkStyleContent_10_plus_12', '\\checkpoint.data.meta', '\\style_10_plus_12', '\\elch.jpg')
-export_checkpoint_to_android()
+#export_checkpoint_to_android()
 #test_android_gen()
