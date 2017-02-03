@@ -303,18 +303,20 @@ def build_gen_graph_deep(trainable = True, variables_gen_filter = [], variables_
                             is_trainable=trainable))
     print(graph['conv1_0'].get_shape())
 
-    graph['conv2_0'] = _instance_norm(
-                        variables_scalars,
-                        _conv2d(
-                            variables_gen_filter,
-                            variables_gen_bias,
-                            graph['conv1_0'],
-                            strides=[1, 3, 3, 1],
-                            i_num_channel = 32,
-                            o_num_filter = 64,
-                            is_trainable = trainable
+    graph['conv2_0'] = _relu(
+                        _instance_norm(
+                            variables_scalars,
+                            _conv2d(
+                                variables_gen_filter,
+                                variables_gen_bias,
+                                graph['conv1_0'],
+                                strides=[1, 3, 3, 1],
+                                i_num_channel = 32,
+                                o_num_filter = 64,
+                                is_trainable = trainable
                         ),
                         is_trainable=trainable
+                        )
     )
     print(graph['conv2_0'].get_shape())
 
@@ -495,18 +497,20 @@ def build_gen_graph_deep(trainable = True, variables_gen_filter = [], variables_
     )
     print(graph['conv3_4_1'].get_shape())
 
-    graph['conv4_0'] = _instance_norm(
-                        variables_scalars,
-                        _fract_conv2d(
-                            variables_gen_filter,
-                            variables_gen_bias,
-                            graph['conv3_4_1'],
-                            [1, 3, 3, 1],
-                            i_num_channel=128,
-                            o_num_filter=64,
-                            is_trainable = trainable
-                        ),
-                        is_trainable=trainable
+    graph['conv4_0'] = _relu(
+                        _instance_norm(
+                            variables_scalars,
+                            _fract_conv2d(
+                                variables_gen_filter,
+                                variables_gen_bias,
+                                graph['conv3_4_1'],
+                                [1, 3, 3, 1],
+                                i_num_channel=128,
+                                o_num_filter=64,
+                                is_trainable = trainable
+                            ),
+                            is_trainable=trainable
+                        )
     )
     print(graph['conv4_0'].get_shape())
 
@@ -607,11 +611,12 @@ def calc_gram(single_picture_tensor_conv):
     wTimesH = int(single_picture_tensor_conv.get_shape()[0] * single_picture_tensor_conv.get_shape()[1])
     numFilters = int(single_picture_tensor_conv.get_shape()[2])
     tensor_conv_reshape = tf.reshape(single_picture_tensor_conv, (wTimesH, numFilters))
-    return tf.matmul(tf.transpose(tensor_conv_reshape), tensor_conv_reshape)
+    return tf.matmul(tf.transpose(tensor_conv_reshape), tensor_conv_reshape) / (wTimesH * numFilters)
 
 
 def calc_content_loss(graph, content_input):
     tensor_conv = graph.get_tensor_by_name(VGG_CONTENT_LAYER)
+    content_size = np.prod(tensorshape_to_int_array(content_input.get_shape()))
 
     #amount_pictures = int(tensorshape_to_int_array(tensor_conv.get_shape())[0] / 2.0)
     amount_pictures = tensorshape_to_int_array(tensor_conv.get_shape())[0]
@@ -621,7 +626,7 @@ def calc_content_loss(graph, content_input):
         #content_l += tf.reduce_sum(tf.square(tensor_conv[i] - tensor_conv[i + amount_pictures]), name='content_loss')
         content_l += tf.reduce_sum(tf.square(tensor_conv[i] - content_input[i]), name='content_loss')
 
-    return content_l
+    return content_l / content_size
 
 
 def calc_style_loss_64(graph, precomputed_style_grams):
@@ -653,25 +658,25 @@ def calc_style_loss_64(graph, precomputed_style_grams):
         style_loss1_1_nominator = tf.reduce_sum(
             tf.pow(tensor_gen_gram1_1 - tensor_style_gram1_1, 2.0))
         style_loss1_1_denominator = 4.0 * ((s[1] * s[2]) ** 2) * (s[3] ** 2.0)
-        style_loss1_1 = tf.div(style_loss1_1_nominator, style_loss1_1_denominator)
+        style_loss1_1 = tf.div(style_loss1_1_nominator, style_loss1_1_denominator) / np.prod(tensorshape_to_int_array(tensor_gen_gram1_1.get_shape()))
 
         s = tensorshape_to_int_array(tensor_conv2_1.get_shape())
         style_loss2_1_nominator = tf.reduce_sum(
             tf.pow(tensor_gen_gram2_1 - tensor_style_gram2_1, 2.0))
         style_loss2_1_denominator = 4.0 * ((s[1] * s[2]) ** 2) * (s[3] ** 2.0)
-        style_loss2_1 = tf.div(style_loss2_1_nominator, style_loss2_1_denominator)
+        style_loss2_1 = tf.div(style_loss2_1_nominator, style_loss2_1_denominator) / np.prod(tensorshape_to_int_array(tensor_gen_gram2_1.get_shape()))
 
         s = tensorshape_to_int_array(tensor_conv3_1.get_shape())
         style_loss3_1_nominator = tf.reduce_sum(
             tf.pow(tensor_gen_gram3_1 - tensor_style_gram3_1, 2.0))
         style_loss3_1_denominator = 4.0 * ((s[1] * s[2]) ** 2) * (s[3] ** 2.0)
-        style_loss3_1 = tf.div(style_loss3_1_nominator, style_loss3_1_denominator)
+        style_loss3_1 = tf.div(style_loss3_1_nominator, style_loss3_1_denominator) / np.prod(tensorshape_to_int_array(tensor_gen_gram3_1.get_shape()))
 
         s = tensorshape_to_int_array(tensor_conv4_1.get_shape())
         style_loss4_1_nominator = tf.reduce_sum(
             tf.pow(tensor_gen_gram4_1 - tensor_style_gram4_1, 2.0))
         style_loss4_1_denominator = 4.0 * ((s[1] * s[2]) ** 2) * (s[3] ** 2.0)
-        style_loss4_1 = tf.div(style_loss4_1_nominator, style_loss4_1_denominator)
+        style_loss4_1 = tf.div(style_loss4_1_nominator, style_loss4_1_denominator) / np.prod(tensorshape_to_int_array(tensor_gen_gram4_1.get_shape()))
 
         #s = tensorshape_to_int_array(tensor_conv5_1.get_shape())
         #style_loss5_1_nominator = tf.reduce_sum(
@@ -680,7 +685,7 @@ def calc_style_loss_64(graph, precomputed_style_grams):
         #style_loss5_1 = tf.div(style_loss5_1_nominator, style_loss5_1_denominator)
 
         style_l += style_loss1_1 + style_loss2_1 + style_loss3_1 + style_loss4_1
-    return style_l
+    return style_l / amount_pictures
 
 
 def main():
@@ -713,7 +718,7 @@ def main():
     style_loss = 1e2 * calc_style_loss_64(graph, pre_style_grams)
     loss = content_loss + style_loss
 
-    learning_rate = 0.0005
+    learning_rate = 0.001
     var_learning_rate = tf.placeholder("float32")
 
     image_counter = 0
@@ -726,8 +731,8 @@ def main():
     # feed[style_image] = style_red.reshape(1, 224, 224,3)
     feed[var_learning_rate] = learning_rate
 
-    image_counter = (image_counter + 4) % len(input_images)
-    if image_counter + 4 > len(input_images) :
+    image_counter = (image_counter + BATCH_SIZE) % len(input_images)
+    if image_counter + BATCH_SIZE > len(input_images) :
         image_counter = 0
 
     with tf.Session() as sess:
@@ -747,8 +752,8 @@ def main():
         sess.run(init, feed)
 
 
-        loading_directory = "\\version_52_k"
-        saving_directory = "\\version_52_k"
+        loading_directory = "\\version_53_k"
+        saving_directory = "\\version_53_k"
         starting_pic_num = 0
 
         saver = create_saver(sess)
@@ -781,7 +786,7 @@ def main():
                     avoid_save_loss = last_l
                     neg_loss_counter += 1
                     print('neg loss -> counter increase :' + str(neg_loss_counter))
-                    if neg_loss_counter == 2 :
+                    if neg_loss_counter == 3 :
                         learning_rate /= 10.0
                         neg_loss_counter = 0
                         restore = True
@@ -843,8 +848,8 @@ def main():
             feed[input_image] = input_images[image_counter : image_counter + BATCH_SIZE]
             feed[content_layer] = pre_content_tensor[image_counter: image_counter + BATCH_SIZE]
 
-            image_counter = (image_counter + 4) % len(input_images)
-            if image_counter + 4 > len(input_images):
+            image_counter = (image_counter + BATCH_SIZE) % len(input_images)
+            if image_counter + BATCH_SIZE > len(input_images):
                 image_counter = 0
 
         save_image(saving_directory, '\\im' + str(i + starting_pic_num + 1), sess.run(gen_image, feed_dict=feed), to255=True)
