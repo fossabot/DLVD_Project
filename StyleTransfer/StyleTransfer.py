@@ -183,7 +183,7 @@ def save_gen_checkpoint(sess, saver, path="", name="\\checkpoint.data"):
     print('Done')
 
 
-def export_gen_graph(sess, variables_filter, variables_bias, variables_scalars, path, name="gen_export.pb", resolution=360) :
+def export_gen_graph(sess, variables_filter, variables_bias, variables_scalars, path, name="gen_export.pb", resolution=630) :
 
     var_gen_filter_new = []
     for i in range(len(variables_filter)):
@@ -863,8 +863,8 @@ def export_checkpoint_to_android():
     gen_graph, input_image, variables_gen_filter, variables_gen_bias, variables_scalars = build_gen_graph_deep(
         input_pictures=BATCH_SIZE)
 
-    loading_directory = "\\version_50_k"
-    saving_directory = "\\version_50_k"
+    loading_directory = "\\version_51_k"
+    saving_directory = "\\version_51_k"
 
     with tf.Session() as sess:
         init = tf.global_variables_initializer()
@@ -905,7 +905,7 @@ def test_android_gen():
         save_image('\\generator_load', '\\test', x, True)
 
 
-main()
+#main()
 #transform(np.reshape(elch, [1,224,224,3]), '\\tmp\\checkStyleContent_10_plus_12', '\\checkpoint.data.meta', '\\style_10_plus_12', '\\elch.jpg')
-#export_checkpoint_to_android()
+export_checkpoint_to_android()
 #test_android_gen()
