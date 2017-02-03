@@ -712,7 +712,7 @@ def main():
     style_loss = 1e2 * calc_style_loss_64(graph, pre_style_grams)
     loss = content_loss + style_loss
 
-    learning_rate = 0.001
+    learning_rate = 0.0005
     var_learning_rate = tf.placeholder("float32")
 
     image_counter = 0
@@ -746,12 +746,12 @@ def main():
         sess.run(init, feed)
 
 
-        loading_directory = "\\version_50_k"
-        saving_directory = "\\version_50_k"
-        starting_pic_num = 1000
+        loading_directory = "\\version_52_k"
+        saving_directory = "\\version_52_k"
+        starting_pic_num = 37000
 
         saver = create_saver(sess)
-        load_gen_last_checkpoint(sess, saver, path=loading_directory)
+        #load_gen_last_checkpoint(sess, saver, path=loading_directory)
 
 
         i = 0
@@ -769,7 +769,7 @@ def main():
 
         restore= False
         last_saved_iteration = 0
-        for i in range(5000):
+        for i in range(3000):
             if(i % 10 == 0):
                 print(i)
 
@@ -780,7 +780,7 @@ def main():
                     avoid_save_loss = last_l
                     neg_loss_counter += 1
                     print('neg loss -> counter increase :' + str(neg_loss_counter))
-                    if neg_loss_counter == 3 :
+                    if neg_loss_counter == 2 :
                         learning_rate /= 10.0
                         neg_loss_counter = 0
                         restore = True
