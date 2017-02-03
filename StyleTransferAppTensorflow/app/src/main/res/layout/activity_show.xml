@@ -8,6 +8,11 @@
         android:background="@android:color/background_dark"
         tools:context="com.example.etienne.styletransferapptensorflow.ShowActivity">
 
+    <ImageView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="fitXY"
+            android:id="@+id/showImageView"/>
     <ProgressBar
             style="?android:attr/progressBarStyleLarge"
             android:layout_width="wrap_content"
@@ -15,33 +20,10 @@
             android:translationZ="10dp"
             android:layout_height="wrap_content"
             android:id="@+id/showProgressBar"/>
-    <LinearLayout
-            android:orientation="vertical"
+    <android.support.v7.widget.RecyclerView
             android:layout_width="match_parent"
-            android:layout_height="match_parent" android:weightSum="1">
-        <ImageView
-                android:layout_width="wrap_content"
-                android:layout_gravity="center"
-                android:background="@drawable/image_border"
-                android:adjustViewBounds="true"
-                android:layout_height="242dp" app:srcCompat="@drawable/back_arrow" android:id="@+id/showImageView"
-                android:layout_weight="0.78"/>
-        <LinearLayout
-                android:orientation="horizontal"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-            <ImageButton
-                    android:layout_width="94dp"
-                    android:background="@android:color/transparent"
-                    android:layout_height="67dp" app:srcCompat="@drawable/back_arrow" android:id="@+id/backButton"/>
-        </LinearLayout>
-        <android.support.v7.widget.RecyclerView
-                android:layout_width="match_parent"
-                android:layout_height="75dp"
-                android:id="@+id/listView" android:clipToPadding="false"
-                android:layout_alignParentLeft="true"
-                android:layout_alignParentStart="true" android:layout_marginLeft="5dp"
-                android:layout_weight="0.84">
-        </android.support.v7.widget.RecyclerView>
-    </LinearLayout>
+            android:id="@+id/listView"
+            android:layout_alignParentBottom="true"
+            android:layout_height="wrap_content">
+    </android.support.v7.widget.RecyclerView>
 </RelativeLayout>

@@ -6,4 +6,6 @@
     <color name="DarkRed">#44151E</color>
     <color name="LightBlue">#218BE4</color>
     <color name="Gray">#b9b9b9</color>
+    <color name="White">#e3e3e3</color>
+    <color name="Black">#000000</color>
 </resources>

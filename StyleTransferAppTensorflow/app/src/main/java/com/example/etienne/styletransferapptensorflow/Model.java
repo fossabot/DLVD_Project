@@ -14,9 +14,9 @@ import org.tensorflow.contrib.android.TensorFlowInferenceInterface;
 public class Model {
     private static String MODEL_FILE;
     private static final String INPUT_NODE = "ph_input_image";
-    private static final String OUTPUT_NODE = "output";
-    private static final int DESIRED_HEIGHT = 800;
-    private static final int DESIRED_WIDTH = 800;
+    private static final String OUTPUT_NODE = "output:0";
+    private static final int DESIRED_HEIGHT = 630;
+    private static final int DESIRED_WIDTH = 630;
     private AssetManager am;
 
     TensorFlowInferenceInterface tensorFlowInferenceInterface;
@@ -37,6 +37,7 @@ public class Model {
 
 
     public Bitmap applyModel(Bitmap bm){
+        Log.d("Bitmap size for Model: ",String.valueOf(bm.getWidth()+"||"+bm.getHeight()));
         int[] intValues = new int[bm.getHeight()*bm.getWidth()];
         bm.getPixels(intValues, 0, bm.getWidth(), 0, 0, bm.getWidth(), bm.getHeight());
         float[] floatValues = new float[intValues.length * 3];
@@ -46,7 +47,6 @@ public class Model {
             floatValues[i * 3 + 1] = ((val >> 8) & 0xFF) / 255.0f;
             floatValues[i * 3 + 2] = (val & 0xFF) / 255.0f;
         }
-
 
         Log.d("Checkpoint","Get to network");
 
