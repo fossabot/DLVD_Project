@@ -611,12 +611,11 @@ def calc_gram(single_picture_tensor_conv):
     wTimesH = int(single_picture_tensor_conv.get_shape()[0] * single_picture_tensor_conv.get_shape()[1])
     numFilters = int(single_picture_tensor_conv.get_shape()[2])
     tensor_conv_reshape = tf.reshape(single_picture_tensor_conv, (wTimesH, numFilters))
-    return tf.matmul(tf.transpose(tensor_conv_reshape), tensor_conv_reshape) / (wTimesH * numFilters)
+    return tf.matmul(tf.transpose(tensor_conv_reshape), tensor_conv_reshape)
 
 
 def calc_content_loss(graph, content_input):
     tensor_conv = graph.get_tensor_by_name(VGG_CONTENT_LAYER)
-    content_size = np.prod(tensorshape_to_int_array(content_input.get_shape()))
 
     #amount_pictures = int(tensorshape_to_int_array(tensor_conv.get_shape())[0] / 2.0)
     amount_pictures = tensorshape_to_int_array(tensor_conv.get_shape())[0]
@@ -626,7 +625,7 @@ def calc_content_loss(graph, content_input):
         #content_l += tf.reduce_sum(tf.square(tensor_conv[i] - tensor_conv[i + amount_pictures]), name='content_loss')
         content_l += tf.reduce_sum(tf.square(tensor_conv[i] - content_input[i]), name='content_loss')
 
-    return content_l / content_size
+    return content_l
 
 
 def calc_style_loss_64(graph, precomputed_style_grams):
@@ -654,29 +653,31 @@ def calc_style_loss_64(graph, precomputed_style_grams):
         tensor_style_gram4_1 = precomputed_style_grams[3]
         #tensor_style_gram5_1 = calc_gram(tensor_conv5_1[2])
 
+
+
         s = tensorshape_to_int_array(tensor_conv1_1.get_shape())
         style_loss1_1_nominator = tf.reduce_sum(
             tf.pow(tensor_gen_gram1_1 - tensor_style_gram1_1, 2.0))
         style_loss1_1_denominator = 4.0 * ((s[1] * s[2]) ** 2) * (s[3] ** 2.0)
-        style_loss1_1 = tf.div(style_loss1_1_nominator, style_loss1_1_denominator) / np.prod(tensorshape_to_int_array(tensor_gen_gram1_1.get_shape()))
+        style_loss1_1 = tf.div(style_loss1_1_nominator, style_loss1_1_denominator)
 
         s = tensorshape_to_int_array(tensor_conv2_1.get_shape())
         style_loss2_1_nominator = tf.reduce_sum(
             tf.pow(tensor_gen_gram2_1 - tensor_style_gram2_1, 2.0))
         style_loss2_1_denominator = 4.0 * ((s[1] * s[2]) ** 2) * (s[3] ** 2.0)
-        style_loss2_1 = tf.div(style_loss2_1_nominator, style_loss2_1_denominator) / np.prod(tensorshape_to_int_array(tensor_gen_gram2_1.get_shape()))
+        style_loss2_1 = tf.div(style_loss2_1_nominator, style_loss2_1_denominator)
 
         s = tensorshape_to_int_array(tensor_conv3_1.get_shape())
         style_loss3_1_nominator = tf.reduce_sum(
             tf.pow(tensor_gen_gram3_1 - tensor_style_gram3_1, 2.0))
         style_loss3_1_denominator = 4.0 * ((s[1] * s[2]) ** 2) * (s[3] ** 2.0)
-        style_loss3_1 = tf.div(style_loss3_1_nominator, style_loss3_1_denominator) / np.prod(tensorshape_to_int_array(tensor_gen_gram3_1.get_shape()))
+        style_loss3_1 = tf.div(style_loss3_1_nominator, style_loss3_1_denominator)
 
         s = tensorshape_to_int_array(tensor_conv4_1.get_shape())
         style_loss4_1_nominator = tf.reduce_sum(
             tf.pow(tensor_gen_gram4_1 - tensor_style_gram4_1, 2.0))
         style_loss4_1_denominator = 4.0 * ((s[1] * s[2]) ** 2) * (s[3] ** 2.0)
-        style_loss4_1 = tf.div(style_loss4_1_nominator, style_loss4_1_denominator) / np.prod(tensorshape_to_int_array(tensor_gen_gram4_1.get_shape()))
+        style_loss4_1 = tf.div(style_loss4_1_nominator, style_loss4_1_denominator)
 
         #s = tensorshape_to_int_array(tensor_conv5_1.get_shape())
         #style_loss5_1_nominator = tf.reduce_sum(
@@ -685,7 +686,7 @@ def calc_style_loss_64(graph, precomputed_style_grams):
         #style_loss5_1 = tf.div(style_loss5_1_nominator, style_loss5_1_denominator)
 
         style_l += style_loss1_1 + style_loss2_1 + style_loss3_1 + style_loss4_1
-    return style_l / amount_pictures
+    return style_l
 
 
 def main():
@@ -714,7 +715,7 @@ def main():
 
     graph = load_vgg_input(batch)
 
-    content_loss = 7.5 * calc_content_loss(graph, content_layer)
+    content_loss = 3.75 * calc_content_loss(graph, content_layer)
     style_loss = 1e2 * calc_style_loss_64(graph, pre_style_grams)
     loss = content_loss + style_loss
 
