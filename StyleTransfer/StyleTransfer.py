@@ -690,10 +690,11 @@ def main():
     print("Shuffle inputs")
     random.seed(SEED)
     random.shuffle(input_images)
+    random.seed(SEED)
     random.shuffle(content_input_images)
     print("Done")
 
-    style_red, avg_style_red = load_image("\\styles\\style.jpg", between_01=True, substract_mean=False)
+    style_red, avg_style_red = load_image("\\styles\\rain_princess.jpg", between_01=True, substract_mean=False)
 
     pre_style_grams, pre_content_tensor = precompute_style_gram(style_red, content_input_images)
 
@@ -748,7 +749,7 @@ def main():
 
         loading_directory = "\\version_52_k"
         saving_directory = "\\version_52_k"
-        starting_pic_num = 37000
+        starting_pic_num = 0
 
         saver = create_saver(sess)
         #load_gen_last_checkpoint(sess, saver, path=loading_directory)
@@ -769,7 +770,7 @@ def main():
 
         restore= False
         last_saved_iteration = 0
-        for i in range(3000):
+        for i in range(20000):
             if(i % 10 == 0):
                 print(i)
 
@@ -873,22 +874,22 @@ def export_checkpoint_to_android():
         saver = create_saver(sess)
         load_gen_last_checkpoint(sess, saver, path=loading_directory)
 
-        export_gen_graph(sess, variables_gen_filter, variables_gen_bias, variables_scalars, saving_directory, name="gen_export_630.pb", resolution=630)
+        export_gen_graph(sess, variables_gen_filter, variables_gen_bias, variables_scalars, saving_directory, name="gen_export_234.pb", resolution=234)
 
 
 def test_android_gen():
-    full_path = output_generator + '\\version_50_k'
+    full_path = output_generator + '\\version_51_k'
 
-    cat_gen, avg_cat_gen = load_image("\\cat.jpg", between_01=True, substract_mean=False, output_size=450)
+    content, avg_content_gen = load_image("\\batch\\cannon\\image_0002.jpg", between_01=True, substract_mean=False, output_size=234)
 
     print('load generator')
-    with open(project_path + full_path + '\\gen_export_450.pb', mode='rb') as f:
+    with open(project_path + full_path + '\\gen_export_234.pb', mode='rb') as f:
         fileContent = f.read()
 
     graph_def = tf.GraphDef()
     graph_def.ParseFromString(fileContent)
 
-    input_image = tf.placeholder("float32", (1, 450, 450, 3), "input")
+    input_image = tf.placeholder("float32", (1, 234, 234, 3), "input")
     tf.import_graph_def(graph_def, input_map={"ph_input_image": input_image})
     # print("graph loaded from disk")
     print('Done')
@@ -896,7 +897,7 @@ def test_android_gen():
     output = tf.get_default_graph().get_tensor_by_name('import/output:0')
 
     feed = {}
-    feed[input_image] = cat_gen.reshape(1, 450, 450, 3)
+    feed[input_image] = content.reshape(1, 234, 234, 3)
 
     with tf.Session() as sess :
         init = tf.global_variables_initializer()
@@ -905,7 +906,6 @@ def test_android_gen():
         save_image('\\generator_load', '\\test', x, True)
 
 
-#main()
-#transform(np.reshape(elch, [1,224,224,3]), '\\tmp\\checkStyleContent_10_plus_12', '\\checkpoint.data.meta', '\\style_10_plus_12', '\\elch.jpg')
-export_checkpoint_to_android()
+main()
+#export_checkpoint_to_android()
 #test_android_gen()
