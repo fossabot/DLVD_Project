@@ -1,6 +1,9 @@
 package com.example.etienne.styletransferapptensorflow;
 
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Matrix;
+import android.graphics.Paint;
 import android.util.Log;
 
 /**
@@ -9,34 +12,49 @@ import android.util.Log;
 public class Utils {
 
     public static Bitmap cropBitmapSquare(Bitmap bm){
-        int width = bm.getWidth();
-        int height = bm.getHeight();
+        Bitmap dstBmp;
+        if (bm.getWidth() >= bm.getHeight()){
 
-        Log.d("Started Cropping",String.valueOf(width + "|" + height));
+            dstBmp = Bitmap.createBitmap(
+                    bm,
+                    bm.getWidth()/2 - bm.getHeight()/2,
+                    0,
+                    bm.getHeight(),
+                    bm.getHeight()
+            );
 
-        int shortEdge = width <  height ? width : height;
-
-        Bitmap newMap = Bitmap.createBitmap(shortEdge,shortEdge, Bitmap.Config.ARGB_8888);
-
-        if (shortEdge == width){
-            int padding = (height - width)/2;
-            for(int i = padding; i < padding + shortEdge; i++){
-                for(int j = 0; j < shortEdge; j++){
-                    newMap.setPixel(j,i - padding,bm.getPixel(j,i));
-                }
-            }
-        }else if(shortEdge == height){
-            int padding = (width - height)/2;
-            for(int i = 0; i < shortEdge; i++){
-                for(int j = padding; j < padding + shortEdge; j++){
-                    newMap.setPixel(j - padding,i,bm.getPixel(j,i));
-                }
-            }
         }else{
-            return bm;
-        }
-        Log.d("Cropped Size",String.valueOf(newMap.getWidth()+"|"+newMap.getHeight()));
-        return newMap;
 
+            dstBmp = Bitmap.createBitmap(
+                    bm,
+                    0,
+                    bm.getHeight()/2 - bm.getWidth()/2,
+                    bm.getWidth(),
+                    bm.getWidth()
+            );
+        }
+        return dstBmp;
+    }
+
+    public static Bitmap resizeBitmapFitXY(int width, int height, Bitmap bitmap){
+        Bitmap background = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        float originalWidth = bitmap.getWidth(), originalHeight = bitmap.getHeight();
+        Canvas canvas = new Canvas(background);
+        float scale, xTranslation = 0.0f, yTranslation = 0.0f;
+        if (originalWidth > originalHeight) {
+            scale = height/originalHeight;
+            xTranslation = (width - originalWidth * scale)/2.0f;
+        }
+        else {
+            scale = width / originalWidth;
+            yTranslation = (height - originalHeight * scale)/2.0f;
+        }
+        Matrix transformation = new Matrix();
+        transformation.postTranslate(xTranslation, yTranslation);
+        transformation.preScale(scale, scale);
+        Paint paint = new Paint();
+        paint.setFilterBitmap(true);
+        canvas.drawBitmap(bitmap, transformation, paint);
+        return background;
     }
 }

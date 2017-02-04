@@ -1,33 +1,22 @@
 package com.example.etienne.styletransferapptensorflow;
 
-import android.app.Activity;
-import android.content.Context;
-import android.content.DialogInterface;
-import android.content.res.Resources;
 import android.graphics.*;
-import android.media.Image;
 import android.support.v7.widget.RecyclerView;
-import android.util.Log;
 import android.view.LayoutInflater;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AdapterView;
-import android.widget.BaseAdapter;
 import android.widget.ImageView;
 import android.widget.TextView;
-import org.w3c.dom.Text;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Created by etienne on 26.01.17.
  */
 public class StyleAdapter extends RecyclerView.Adapter<StyleAdapter.MyViewHolder> {
-    private List<ListItem> items;
+    private List<ModelListItem> items;
 
-    public StyleAdapter(List<ListItem> items){
+    public StyleAdapter(List<ModelListItem> items){
         this.items = items;
     }
 
@@ -39,7 +28,7 @@ public class StyleAdapter extends RecyclerView.Adapter<StyleAdapter.MyViewHolder
 
     @Override
     public void onBindViewHolder(MyViewHolder holder, int position) {
-        ListItem item = items.get(position);
+        ModelListItem item = items.get(position);
         holder.textView.setText(item.getStyleName());
         Bitmap toDraw = item.getImage();
         Bitmap imageRounded = Bitmap.createBitmap(toDraw.getWidth(), toDraw.getHeight(), toDraw.getConfig());
