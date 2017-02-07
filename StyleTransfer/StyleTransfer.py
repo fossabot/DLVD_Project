@@ -16,7 +16,7 @@ def precompute_style_gram(style_image, content_images):
     print("Precompute style tensors")
     graph = tf.Graph()
     with graph.as_default() as g:
-        inp = tf.placeholder("float32", [None, 224, 224, 3])
+        inp = tf.placeholder("float32", [None, conf.VGG_INPUT_RESOLUTION, conf.VGG_INPUT_RESOLUTION, 3])
         vn.load_vgg_input(tf, inp)
 
         tensor_conv1_1 = graph.get_tensor_by_name(conf.VGG_STYLE_TENSOR_1)
@@ -30,7 +30,7 @@ def precompute_style_gram(style_image, content_images):
         tensor_style_gram4_1 = calc_gram(tensor_conv4_1[0])
 
         feed = {}
-        feed[inp] = style_image.reshape(1, 224, 224, 3)
+        feed[inp] = style_image.reshape(1, conf.VGG_INPUT_RESOLUTION, conf.VGG_INPUT_RESOLUTION, 3)
         with tf.Session() as sess :
             gram_1 = sess.run(tensor_style_gram1_1, feed_dict=feed)
             gram_2 = sess.run(tensor_style_gram2_1, feed_dict=feed)
@@ -51,6 +51,8 @@ def precompute_style_gram(style_image, content_images):
             if counter + batch_size > len(content_images):
                 batch_size = len(content_images) - counter
                 brek_now = True
+                if batch_size == 0 :
+                    break;
 
             feed[inp] = content_images[counter : counter + batch_size]
 
@@ -149,9 +151,14 @@ def calc_style_loss_64(graph, precomputed_style_grams):
     return style_l
 
 
+def calc_tv_loss(gen_image):
+    y_tv = tf.nn.l2_loss(gen_image[:, 1:, :, :] - gen_image[:, :conf.INPUT_RESOLUTION - 1, :, :])
+    x_tv = tf.nn.l2_loss(gen_image[:, :, 1:, :] - gen_image[:, :, :conf.INPUT_RESOLUTION - 1, :])
+    return 2 * (x_tv + y_tv)
+
 def main():
 
-    input_images, content_input_images = utils.load_pictures_for_feed("\\batch", recursive=True, gen_res=conf.INPUT_RESOLUTION)
+    input_images, content_input_images = utils.load_pictures_for_feed("\\batch", recursive=True, gen_res=conf.INPUT_RESOLUTION, content_res=conf.VGG_INPUT_RESOLUTION)
 
     print("Shuffle inputs")
     random.seed(conf.SEED)
@@ -172,20 +179,22 @@ def main():
                                 ,[conf.BATCH_SIZE, pre_content_tensor_shape[1], pre_content_tensor_shape[2], pre_content_tensor_shape[3]]
                                 ,name="content_layer")
 
-    gen_shape = utils.tensorshape_to_int_array(gen_image.get_shape())
-    cut_1 = int((gen_shape[1] - conf.VGG_INPUT_RESOLUTION) / 2)
-    cut_2 = int((gen_shape[2] - conf.VGG_INPUT_RESOLUTION) / 2)
-    batch = tf.slice(gen_image, [0, cut_1, cut_2, 0], [gen_shape[0], conf.VGG_INPUT_RESOLUTION, conf.VGG_INPUT_RESOLUTION, gen_shape[3]])
-    #batch = tf.concat(0, [batch, content_input])
+    #gen_shape = utils.tensorshape_to_int_array(gen_image.get_shape())
+    #cut_1 = int((gen_shape[1] - conf.VGG_INPUT_RESOLUTION) / 2)
+    #cut_2 = int((gen_shape[2] - conf.VGG_INPUT_RESOLUTION) / 2)
+    #batch = tf.slice(gen_image, [0, cut_1, cut_2, 0], [gen_shape[0], conf.VGG_INPUT_RESOLUTION, conf.VGG_INPUT_RESOLUTION, gen_shape[3]])
+
+    batch = gen_image / 255.0
     print(utils.tensorshape_to_int_array(batch.get_shape()))
 
     graph = vn.load_vgg_input(tf, batch)
 
     content_loss = 7.5 * calc_content_loss(graph, content_layer)
     style_loss = 1e2 * calc_style_loss_64(graph, pre_style_grams)
-    loss = content_loss + style_loss
+    tv_loss = 1e2 * calc_tv_loss(gen_image)
+    loss = content_loss + style_loss + tv_loss
 
-    learning_rate = 0.001
+    learning_rate = conf.LEARNING_RATE
     var_learning_rate = tf.placeholder("float32")
 
     image_counter = 0
@@ -205,7 +214,7 @@ def main():
     with tf.Session() as sess:
 
         # set log directory
-        #summary_writer = tf.train.SummaryWriter(project_path + log_train,graph_def=sess.graph_def)
+        #summary_writer = tf.train.SummaryWriter(conf.project_path + conf.log_train, graph_def=sess.graph_def)
 
         #optimizer = tf.train.MomentumOptimizer(learning_rate=var_learning_rate, momentum=0.9)
         optimizer = tf.train.AdamOptimizer(learning_rate=var_learning_rate)
@@ -231,7 +240,7 @@ def main():
         last_l = sess.run(loss, feed_dict=feed)
         last_cl = sess.run(content_loss, feed_dict=feed)
         last_sl = sess.run(style_loss, feed_dict=feed)
-        #last_bl = sess.run(black_loss, feed_dict=feed)
+        last_tvl = sess.run(tv_loss, feed_dict=feed)
         #last_wl = sess.run(weight_loss, feed_dict=feed)
 
         start_training_time = time.time()
@@ -242,7 +251,7 @@ def main():
 
         restore= False
         last_saved_iteration = 0
-        for i in range(8250):
+        for i in range(10000):
             if(i % 10 == 0):
                 print(i)
 
@@ -285,21 +294,17 @@ def main():
                 print('style_loss_improvement : ' + str((last_sl - sl) / last_sl))
                 last_sl=sl
 
-                #bl = sess.run(black_loss, feed_dict=feed)
-                #print('black_loss : ' + str(bl))
-                #print('black_loss_improvement : ' + str((last_bl - bl) / last_bl))
-                #last_bl = bl
-                #wl = sess.run(weight_loss, feed_dict=feed)
-                #print('weight_loss : ' + str(wl))
-                #print('weight_loss_improvement : ' + str((last_wl - wl) / last_wl))
-                #last_wl=wl
+                tvl = sess.run(tv_loss, feed_dict=feed)
+                print('tv_loss : ' + str(tvl))
+                print('tv_loss_improvement : ' + str((last_tvl - tvl) / last_tvl))
+                last_tvl = tvl
 
                 t = time.time()
                 print('training time: ' + utils.time_to_str(t - start_training_time))
                 print('training time since last checkpoint: ' + utils.time_to_str(t - last_training_checkpoint_time))
                 last_training_checkpoint_time = t
 
-                utils.save_image(saving_directory, '\\im' + str(i + starting_pic_num), sess.run(gen_image, feed_dict=feed), to255=True)
+                utils.save_image(saving_directory, '\\im' + str(i + starting_pic_num), sess.run(gen_image, feed_dict=feed), to255=False)
 
                 if restore == False:
                     if avoid_save_loss == -1 :
@@ -319,7 +324,7 @@ def main():
             if image_counter + conf.BATCH_SIZE > len(input_images):
                 image_counter = 0
 
-        utils.save_image(saving_directory, '\\im' + str(i + starting_pic_num + 1), sess.run(gen_image, feed_dict=feed), to255=True)
+        utils.save_image(saving_directory, '\\im' + str(i + starting_pic_num + 1), sess.run(gen_image, feed_dict=feed), to255=False)
         print(sess.run(loss, feed_dict=feed))
         if avoid_save_loss == -1:
             nio.save_gen_checkpoint(sess, saver, path=saving_directory)
@@ -330,6 +335,6 @@ def main():
             print("export pb-File")
             ai.export_gen_graph(tf, sess, variables_gen_filter, variables_gen_bias, variables_scalars, saving_directory)
 
-#main()
+main()
 #ai.export_checkpoint_to_android(tf)
-ai.test_android_gen(tf)
+#ai.test_android_gen(tf)

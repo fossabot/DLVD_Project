@@ -1,5 +1,6 @@
 import numpy as np
 import utils as utils
+import config as conf
 
 def _relu(tf, conv2d_layer):
     return tf.nn.relu(conv2d_layer)
@@ -8,29 +9,30 @@ def _relu(tf, conv2d_layer):
 def _conv2d(tf, variables_gen_filter, variables_gen_bias, prev_layer, i_num_channel = 3, o_num_filter = 3, strides=[1, 1, 1, 1], filter_size=3, pad='SAME', is_trainable = True):
     var = np.sqrt(2.0 / (filter_size * filter_size * i_num_channel))
     if is_trainable:
-        W = tf.Variable(tf.truncated_normal([filter_size, filter_size ,i_num_channel, o_num_filter], dtype='float32', stddev=var), dtype="float32", name="W", trainable=is_trainable)
-        b = tf.Variable(tf.truncated_normal([o_num_filter], stddev=0.1, dtype='float32'), dtype="float32", name="b", trainable=is_trainable)
+        W = tf.Variable(tf.truncated_normal([filter_size, filter_size ,i_num_channel, o_num_filter], dtype='float32', stddev=conf.INIT_STD_DEV, seed=conf.TRUNCATED_SEED), dtype="float32", name="W", trainable=is_trainable)
+        #b = tf.Variable(tf.truncated_normal([o_num_filter], stddev=conf.INIT_STD_DEV, seed=conf.TRUNCATED_SEED, dtype='float32'), dtype="float32", name="b", trainable=is_trainable)
         variables_gen_filter.append(W)
-        variables_gen_bias.append(b)
+        #variables_gen_bias.append(b)
     else:
         W = tf.constant(variables_gen_filter.pop(0), dtype="float32", name="W")
-        b = tf.constant(variables_gen_bias.pop(0), dtype="float32", name="b")
-    return tf.add(tf.nn.conv2d(prev_layer, filter=W, strides=strides, padding=pad), b)
+        #b = tf.constant(variables_gen_bias.pop(0), dtype="float32", name="b")
+    #return tf.add(tf.nn.conv2d(prev_layer, filter=W, strides=strides, padding=pad), b)
+    return tf.nn.conv2d(prev_layer, filter=W, strides=strides, padding=pad)
 
 
 def _fract_conv2d(tf, variables_gen_filter, variables_gen_bias, prev_layer, strides, i_num_channel = 3, o_num_filter = 3, pad='SAME', filter_size=3, is_trainable = True):
     var = np.sqrt(2.0 / (filter_size * filter_size * i_num_channel))
     if is_trainable:
-        W = tf.Variable(tf.truncated_normal([filter_size,filter_size,o_num_filter, i_num_channel], dtype='float32', stddev=var), dtype="float32", name="W", trainable=is_trainable)
-        b = tf.Variable(tf.truncated_normal([o_num_filter], dtype='float32', stddev=0.1), dtype="float32", name="b", trainable=is_trainable)
+        W = tf.Variable(tf.truncated_normal([filter_size,filter_size,o_num_filter, i_num_channel], dtype='float32', stddev=conf.INIT_STD_DEV, seed=conf.TRUNCATED_SEED), dtype="float32", name="W", trainable=is_trainable)
+        #b = tf.Variable(tf.truncated_normal([o_num_filter], dtype='float32', stddev=conf.INIT_STD_DEV, seed=conf.TRUNCATED_SEED), dtype="float32", name="b", trainable=is_trainable)
         variables_gen_filter.append(W)
-        variables_gen_bias.append(b)
+        #variables_gen_bias.append(b)
     else:
         W = tf.constant(variables_gen_filter.pop(0), dtype="float32", name="W")
-        b = tf.constant(variables_gen_bias.pop(0), dtype="float32", name="b")
+        #b = tf.constant(variables_gen_bias.pop(0), dtype="float32", name="b")
     shape = utils.tensorshape_to_int_array(prev_layer.get_shape())
-    return tf.add(tf.nn.conv2d_transpose(prev_layer, W, [shape[0], strides[1]*shape[1], strides[2]*shape[2], o_num_filter ] , strides, padding=pad), b)
-
+    #return tf.add(tf.nn.conv2d_transpose(prev_layer, W, [shape[0], strides[1]*shape[1], strides[2]*shape[2], o_num_filter ] , strides, padding=pad), b)
+    return tf.nn.conv2d_transpose(prev_layer, W, [shape[0], strides[1]*shape[1], strides[2]*shape[2], o_num_filter ] , strides, padding=pad)
 
 def _instance_norm(tf, variable_scalars, x, epsilon=1e-3, is_trainable=True):
     batch, rows, cols, channels = [i.value for i in x.get_shape()]
@@ -87,7 +89,7 @@ def build_gen_graph_deep(tf, trainable = True, variables_gen_filter = [], variab
                                 variables_gen_filter,
                                 variables_gen_bias,
                                 graph['conv1_0'],
-                                strides=[1, 3, 3, 1],
+                                strides=[1, conf.DOWN_SAMPLING, conf.DOWN_SAMPLING, 1],
                                 i_num_channel = 32,
                                 o_num_filter = 64,
                                 is_trainable = trainable
@@ -104,7 +106,7 @@ def build_gen_graph_deep(tf, trainable = True, variables_gen_filter = [], variab
                                 variables_gen_filter,
                                 variables_gen_bias,
                                 graph['conv2_0'],
-                                strides=[1, 3, 3, 1],
+                                strides=[1, conf.DOWN_SAMPLING, conf.DOWN_SAMPLING, 1],
                                 i_num_channel=64,
                                 o_num_filter=128,
                                 is_trainable = trainable
@@ -123,7 +125,7 @@ def build_gen_graph_deep(tf, trainable = True, variables_gen_filter = [], variab
                                         graph['conv2_1'],
                                         i_num_channel=128,
                                         o_num_filter=128,
-                                        pad='VALID',
+                                        pad='SAME',
                                         is_trainable = trainable
                                 ),
                                 is_trainable=trainable
@@ -131,7 +133,7 @@ def build_gen_graph_deep(tf, trainable = True, variables_gen_filter = [], variab
     )
 
     graph['conv3_0_1'] = tf.add(
-                            _clip_2x2_border(tf, graph['conv2_1']),
+                            graph['conv2_1'],
                             _instance_norm(tf,
                                 variables_scalars,
                                 _conv2d(tf,
@@ -140,7 +142,7 @@ def build_gen_graph_deep(tf, trainable = True, variables_gen_filter = [], variab
                                     graph['conv3_0_0'],
                                     i_num_channel=128,
                                     o_num_filter=128,
-                                    pad='VALID',
+                                    pad='SAME',
                                     is_trainable = trainable
                                 ),
                                 is_trainable=trainable
@@ -156,7 +158,7 @@ def build_gen_graph_deep(tf, trainable = True, variables_gen_filter = [], variab
                                     graph['conv3_0_1'],
                                     i_num_channel=128,
                                     o_num_filter=128,
-                                    pad='VALID',
+                                    pad='SAME',
                                     is_trainable = trainable
                                 ),
                                 is_trainable=trainable
@@ -164,7 +166,7 @@ def build_gen_graph_deep(tf, trainable = True, variables_gen_filter = [], variab
     )
 
     graph['conv3_1_1'] = tf.add(
-                            _clip_2x2_border(tf, graph['conv3_0_1']),
+                            graph['conv3_0_1'],
                             _instance_norm(tf,
                                 variables_scalars,
                                 _conv2d(tf,
@@ -173,7 +175,7 @@ def build_gen_graph_deep(tf, trainable = True, variables_gen_filter = [], variab
                                     graph['conv3_1_0'],
                                     i_num_channel=128,
                                     o_num_filter=128,
-                                    pad='VALID',
+                                    pad='SAME',
                                     is_trainable = trainable
                                 ),
                                 is_trainable=trainable
@@ -189,7 +191,7 @@ def build_gen_graph_deep(tf, trainable = True, variables_gen_filter = [], variab
                                     graph['conv3_1_1'],
                                     i_num_channel=128,
                                     o_num_filter=128,
-                                    pad='VALID',
+                                    pad='SAME',
                                     is_trainable = trainable
                                 ),
                                 is_trainable=trainable
@@ -197,7 +199,7 @@ def build_gen_graph_deep(tf, trainable = True, variables_gen_filter = [], variab
     )
 
     graph['conv3_2_1'] = tf.add(
-                                _clip_2x2_border(tf, graph['conv3_1_1']),
+                                graph['conv3_1_1'],
                                 _instance_norm(tf,
                                     variables_scalars,
                                     _conv2d(tf,
@@ -206,7 +208,7 @@ def build_gen_graph_deep(tf, trainable = True, variables_gen_filter = [], variab
                                         graph['conv3_2_0'],
                                         i_num_channel=128,
                                         o_num_filter=128,
-                                        pad='VALID',
+                                        pad='SAME',
                                         is_trainable = trainable
                                     ),
                                 is_trainable=trainable
@@ -222,7 +224,7 @@ def build_gen_graph_deep(tf, trainable = True, variables_gen_filter = [], variab
                                     graph['conv3_2_1'],
                                     i_num_channel=128,
                                     o_num_filter=128,
-                                    pad='VALID',
+                                    pad='SAME',
                                     is_trainable = trainable
                                 ),
                                 is_trainable=trainable
@@ -230,7 +232,7 @@ def build_gen_graph_deep(tf, trainable = True, variables_gen_filter = [], variab
     )
 
     graph['conv3_3_1'] = tf.add(
-                                _clip_2x2_border(tf, graph['conv3_2_1']),
+                                graph['conv3_2_1'],
                                 _instance_norm(tf,
                                     variables_scalars,
                                     _conv2d(tf,
@@ -239,7 +241,7 @@ def build_gen_graph_deep(tf, trainable = True, variables_gen_filter = [], variab
                                         graph['conv3_3_0'],
                                         i_num_channel=128,
                                         o_num_filter=128,
-                                        pad='VALID',
+                                        pad='SAME',
                                         is_trainable = trainable
                                     ),
                                     is_trainable=trainable
@@ -255,7 +257,7 @@ def build_gen_graph_deep(tf, trainable = True, variables_gen_filter = [], variab
                                     graph['conv3_3_1'],
                                     i_num_channel=128,
                                     o_num_filter=128,
-                                    pad='VALID',
+                                    pad='SAME',
                                     is_trainable = trainable
                                 ),
                                 is_trainable=trainable
@@ -263,7 +265,7 @@ def build_gen_graph_deep(tf, trainable = True, variables_gen_filter = [], variab
     )
 
     graph['conv3_4_1'] = tf.add(
-                                _clip_2x2_border(tf, graph['conv3_3_1']),
+                                graph['conv3_3_1'],
                                 _instance_norm(tf,
                                     variables_scalars,
                                     _conv2d(tf,
@@ -272,7 +274,7 @@ def build_gen_graph_deep(tf, trainable = True, variables_gen_filter = [], variab
                                         graph['conv3_4_0'],
                                         i_num_channel=128,
                                         o_num_filter=128,
-                                        pad='VALID',
+                                        pad='SAME',
                                         is_trainable = trainable
                                     ),
                                     is_trainable=trainable
@@ -287,7 +289,7 @@ def build_gen_graph_deep(tf, trainable = True, variables_gen_filter = [], variab
                                 variables_gen_filter,
                                 variables_gen_bias,
                                 graph['conv3_4_1'],
-                                [1, 3, 3, 1],
+                                [1, conf.DOWN_SAMPLING, conf.DOWN_SAMPLING, 1],
                                 i_num_channel=128,
                                 o_num_filter=64,
                                 is_trainable = trainable
@@ -304,7 +306,7 @@ def build_gen_graph_deep(tf, trainable = True, variables_gen_filter = [], variab
                                 variables_gen_filter,
                                 variables_gen_bias,
                                 graph['conv4_0'],
-                                [1, 3, 3, 1],
+                                [1, conf.DOWN_SAMPLING, conf.DOWN_SAMPLING, 1],
                                 i_num_channel=64,
                                 o_num_filter=32,
                                 is_trainable = trainable
@@ -314,22 +316,22 @@ def build_gen_graph_deep(tf, trainable = True, variables_gen_filter = [], variab
     )
     print(graph['conv4_1'].get_shape())
 
-    graph['conv5_0'] = _relu(tf,
-                        _instance_norm(tf,
-                            variables_scalars,
-                            _conv2d(tf,
-                                variables_gen_filter,
-                                variables_gen_bias,
-                                graph['conv4_1'],
-                                i_num_channel=32,
-                                o_num_filter=3,
-                                filter_size=9,
-                                is_trainable = trainable
-                            ),
-                            is_trainable=trainable
-                        )
+    graph['conv5_0'] = _instance_norm(tf,
+                        variables_scalars,
+                        _conv2d(tf,
+                            variables_gen_filter,
+                            variables_gen_bias,
+                            graph['conv4_1'],
+                            i_num_channel=32,
+                            o_num_filter=3,
+                            filter_size=9,
+                            is_trainable = trainable
+                        ),
+                        is_trainable=trainable
     )
 
-    graph['output'] = tf.tanh(graph['conv5_0'], name='output')
+    print(graph['conv5_0'].get_shape())
+
+    graph['output'] = tf.add(tf.nn.tanh(graph['conv5_0']) * 150, 225./2, name='output')
 
     return graph, input_image, variables_gen_filter, variables_gen_bias, variables_scalars
