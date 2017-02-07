@@ -228,8 +228,8 @@ def main():
         sess.run(init, feed)
 
 
-        loading_directory = "\\version_56_k"
-        saving_directory = "\\version_56_k"
+        loading_directory = "\\version_57_k"
+        saving_directory = "\\version_57_k"
         starting_pic_num = 0
 
         saver = nio.create_saver(tf, sess)

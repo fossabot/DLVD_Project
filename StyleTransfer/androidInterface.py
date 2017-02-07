@@ -4,7 +4,7 @@ import utils as utils
 import networkIO as nio
 
 
-def export_gen_graph(tf, sess, variables_filter, variables_bias, variables_scalars, path, name="gen_export.pb", resolution=630) :
+def export_gen_graph(tf, sess, variables_filter, variables_bias, variables_scalars, path, name="gen_export.pb", resolution=224) :
 
     var_gen_filter_new = []
     for i in range(len(variables_filter)):
@@ -36,10 +36,10 @@ def export_gen_graph(tf, sess, variables_filter, variables_bias, variables_scala
 def export_checkpoint_to_android(tf):
 
     gen_graph, input_image, variables_gen_filter, variables_gen_bias, variables_scalars = gn.build_gen_graph_deep(tf,
-        input_pictures=conf.BATCH_SIZE, input_resolution=414)
+        input_pictures=conf.BATCH_SIZE, input_resolution=conf.INPUT_RESOLUTION)
 
-    loading_directory = "\\version_55_k"
-    saving_directory = "\\version_55_k"
+    loading_directory = "\\version_56_k"
+    saving_directory = "\\version_56_k"
 
     with tf.Session() as sess:
         init = tf.global_variables_initializer()
@@ -48,11 +48,12 @@ def export_checkpoint_to_android(tf):
         saver = nio.create_saver(tf, sess)
         nio.load_gen_last_checkpoint(tf, sess, saver, path=loading_directory)
 
-        export_gen_graph(tf, sess, variables_gen_filter, variables_gen_bias, variables_scalars, saving_directory, name="gen_export_712.pb", resolution=712)
+        export_gen_graph(tf, sess, variables_gen_filter, variables_gen_bias, variables_scalars, saving_directory,
+                         name='gen_export_712.pb', resolution=712)
 
 
 def test_android_gen(tf):
-    load_and_save_path = '\\version_55_k'
+    load_and_save_path = '\\version_56_k'
     full_path = conf.output_generator + load_and_save_path
 
     content, avg_content_gen = utils.load_image("\\chicago.jpg", between_01=True, substract_mean=False, output_size=712)
@@ -78,4 +79,4 @@ def test_android_gen(tf):
         init = tf.global_variables_initializer()
         sess.run(init)
         x = sess.run(output, feed_dict=feed)
-        utils.save_image(load_and_save_path, '\\test', x, True)
+        utils.save_image(load_and_save_path, '\\test', x)

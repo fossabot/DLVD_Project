@@ -7,7 +7,6 @@ def _relu(tf, conv2d_layer):
 
 
 def _conv2d(tf, variables_gen_filter, variables_gen_bias, prev_layer, i_num_channel = 3, o_num_filter = 3, strides=[1, 1, 1, 1], filter_size=3, pad='SAME', is_trainable = True):
-    var = np.sqrt(2.0 / (filter_size * filter_size * i_num_channel))
     if is_trainable:
         W = tf.Variable(tf.truncated_normal([filter_size, filter_size ,i_num_channel, o_num_filter], dtype='float32', stddev=conf.INIT_STD_DEV, seed=conf.TRUNCATED_SEED), dtype="float32", name="W", trainable=is_trainable)
         #b = tf.Variable(tf.truncated_normal([o_num_filter], stddev=conf.INIT_STD_DEV, seed=conf.TRUNCATED_SEED, dtype='float32'), dtype="float32", name="b", trainable=is_trainable)
@@ -21,7 +20,6 @@ def _conv2d(tf, variables_gen_filter, variables_gen_bias, prev_layer, i_num_chan
 
 
 def _fract_conv2d(tf, variables_gen_filter, variables_gen_bias, prev_layer, strides, i_num_channel = 3, o_num_filter = 3, pad='SAME', filter_size=3, is_trainable = True):
-    var = np.sqrt(2.0 / (filter_size * filter_size * i_num_channel))
     if is_trainable:
         W = tf.Variable(tf.truncated_normal([filter_size,filter_size,o_num_filter, i_num_channel], dtype='float32', stddev=conf.INIT_STD_DEV, seed=conf.TRUNCATED_SEED), dtype="float32", name="W", trainable=is_trainable)
         #b = tf.Variable(tf.truncated_normal([o_num_filter], dtype='float32', stddev=conf.INIT_STD_DEV, seed=conf.TRUNCATED_SEED), dtype="float32", name="b", trainable=is_trainable)

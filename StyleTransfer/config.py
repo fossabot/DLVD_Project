@@ -18,7 +18,7 @@ VGG_STYLE_TENSOR_3 = "import/conv3_2/Relu:0"
 VGG_STYLE_TENSOR_4 = "import/conv4_2/Relu:0"
 VGG_INPUT_RESOLUTION = 224
 
-VGG_CONTENT_LAYER = "import/conv1_2/Relu:0"
+VGG_CONTENT_LAYER = "import/conv3_2/Relu:0"
 
 INIT_STD_DEV = .1
 TRUNCATED_SEED = 1
