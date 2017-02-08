@@ -336,6 +336,6 @@ def main():
             print("export pb-File")
             ai.export_gen_graph(tf, sess, variables_gen_filter, variables_gen_bias, variables_scalars, saving_directory)
 
-main()
+#main()
 #ai.export_checkpoint_to_android(tf)
-#ai.test_android_gen(tf)
+ai.test_android_gen(tf)
