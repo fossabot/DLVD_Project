@@ -75,15 +75,6 @@ public class Model {
                             | (((int) (outputValues[i * 3])) << 16)
                             | (((int) (outputValues[i * 3 + 1])) << 8)
                             | ((int) (outputValues[i * 3 + 2]));
-
-            int r = Color.red(colors[i]);
-            r = Utils.clamp(r,0,255);
-            int g = Color.green(colors[i]);
-            g = Utils.clamp(g,0,255);
-            int b = Color.blue(colors[i]);
-            b = Utils.clamp(b,0,255);
-           colors[i] = Color.rgb(r,g,b);
-
         }
         toDraw.setPixels(colors, 0, toDraw.getWidth(), 0, 0, toDraw.getWidth(), toDraw.getHeight());
         return toDraw;
