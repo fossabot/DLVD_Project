@@ -49,7 +49,7 @@ def export_checkpoint_to_android(tf):
         nio.load_gen_last_checkpoint(tf, sess, saver, path=loading_directory)
 
         export_gen_graph(tf, sess, variables_gen_filter, variables_gen_bias, variables_scalars, saving_directory,
-                         name='gen_export_712.pb', resolution=712)
+                         name='gen_export_632.pb', resolution=632)
 
 
 def test_android_gen(tf):
