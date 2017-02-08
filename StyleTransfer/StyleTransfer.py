@@ -190,7 +190,7 @@ def main():
     graph = vn.load_vgg_input(tf, batch)
 
     content_loss = 7.5 * calc_content_loss(graph, content_layer)
-    style_loss = 1e2 * calc_style_loss_64(graph, pre_style_grams)
+    style_loss = 5e2 * calc_style_loss_64(graph, pre_style_grams)
     tv_loss = 1e2 * calc_tv_loss(gen_image)
     loss = content_loss + style_loss + tv_loss
 
@@ -228,8 +228,8 @@ def main():
         sess.run(init, feed)
 
 
-        loading_directory = "\\version_57_k"
-        saving_directory = "\\version_57_k"
+        loading_directory = "\\version_59_k"
+        saving_directory = "\\version_59_k"
         starting_pic_num = 0
 
         saver = nio.create_saver(tf, sess)
@@ -251,7 +251,7 @@ def main():
 
         restore= False
         last_saved_iteration = 0
-        for i in range(10000):
+        for i in range(40000):
             if(i % 10 == 0):
                 print(i)
 

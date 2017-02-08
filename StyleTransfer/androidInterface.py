@@ -38,8 +38,8 @@ def export_checkpoint_to_android(tf):
     gen_graph, input_image, variables_gen_filter, variables_gen_bias, variables_scalars = gn.build_gen_graph_deep(tf,
         input_pictures=conf.BATCH_SIZE, input_resolution=conf.INPUT_RESOLUTION)
 
-    loading_directory = "\\version_56_k"
-    saving_directory = "\\version_56_k"
+    loading_directory = "\\version_59_k"
+    saving_directory = "\\version_59_k"
 
     with tf.Session() as sess:
         init = tf.global_variables_initializer()
@@ -53,7 +53,7 @@ def export_checkpoint_to_android(tf):
 
 
 def test_android_gen(tf):
-    load_and_save_path = '\\version_56_k'
+    load_and_save_path = '\\version_59_k'
     full_path = conf.output_generator + load_and_save_path
 
     content, avg_content_gen = utils.load_image("\\chicago.jpg", between_01=True, substract_mean=False, output_size=712)
