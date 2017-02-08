@@ -38,11 +38,11 @@ def export_checkpoint_to_android(tf):
     gen_graph, input_image, variables_gen_filter, variables_gen_bias, variables_scalars = gn.build_gen_graph_deep(tf,
                                             input_pictures=conf.BATCH_SIZE, width_res=conf.INPUT_RESOLUTION)
 
-    loading_directory = "\\version_59_k"
-    saving_directory = "\\version_59_k"
+    loading_directory = "\\version_60_k"
+    saving_directory = "\\version_60_k"
 
-    width = conf.ANDROID_WIDTH
-    ratio = conf.ANDROID_RATIO
+    width = conf.FULL_HD_WIDTH
+    ratio = conf.FULL_HD_RATIO
     height = int(width * ratio)
 
     with tf.Session() as sess:
@@ -57,12 +57,12 @@ def export_checkpoint_to_android(tf):
 
 
 def test_android_gen(tf):
-    load_and_save_path = '\\version_59_k'
+    load_and_save_path = '\\version_60_k'
     full_path = conf.output_generator + load_and_save_path
 
-    image = "\\chicago.jpg"
-    width = conf.ANDROID_WIDTH
-    ratio = conf.ANDROID_RATIO
+    image = "\\skyline_high_res.jpg"
+    width = conf.FULL_HD_WIDTH
+    ratio = conf.FULL_HD_RATIO
     height = int(width * ratio)
 
     content, avg_content_gen = utils.load_image(image, between_01=True, substract_mean=False, width=width, ratio=ratio)

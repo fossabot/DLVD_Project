@@ -231,7 +231,7 @@ def main():
 
         loading_directory = "\\version_60_k"
         saving_directory = "\\version_60_k"
-        starting_pic_num = 0
+        starting_pic_num = 750
 
         saver = nio.create_saver(tf, sess)
         nio.load_gen_last_checkpoint(tf, sess, saver, path=loading_directory)
@@ -336,6 +336,6 @@ def main():
             print("export pb-File")
             ai.export_gen_graph(tf, sess, variables_gen_filter, variables_gen_bias, variables_scalars, saving_directory)
 
-main()
+#main()
 #ai.export_checkpoint_to_android(tf)
-#ai.test_android_gen(tf)
+ai.test_android_gen(tf)
