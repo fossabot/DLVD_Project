@@ -117,6 +117,7 @@ public class ShowActivity extends AppCompatActivity {
         @Override
         protected Bitmap doInBackground(Bitmap... params) {
             Bitmap bm = params[0];
+            bm = Bitmap.createScaledBitmap(bm,468,832,false);
             return currentModel.applyModel(bm);
         }
 

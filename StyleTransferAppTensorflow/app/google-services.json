@@ -1,0 +1,45 @@
+{
+  "project_info": {
+    "project_number": "572618286021",
+    "firebase_url": "https://styletransfer-8f2f6.firebaseio.com",
+    "project_id": "styletransfer-8f2f6",
+    "storage_bucket": "styletransfer-8f2f6.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:572618286021:android:0d9830a932f30290",
+        "android_client_info": {
+          "package_name": "com.example.etienne.styletransferapptensorflow"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "572618286021-mo8uidtibus80jdm9b114tvjer2a4rpe.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBj4hPN3-tGnxBt4cqzZmTB9m6npuFVCmI"
+        },
+        {
+          "current_key": "AIzaSyAH8g3HT6Tsj0QVMb8gzBEQ7FRxbyl0kQk"
+        }
+      ],
+      "services": {
+        "analytics_service": {
+          "status": 1
+        },
+        "appinvite_service": {
+          "status": 1,
+          "other_platform_oauth_client": []
+        },
+        "ads_service": {
+          "status": 2
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
