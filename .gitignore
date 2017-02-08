@@ -176,10 +176,12 @@ Temporary Items
 
 #Local Data
 *.tfmodel
-StyleTransfer/logs/
-StyleTransfer/data
-StyleTransfer/outputs/images
-StyleTransferAppTensorflow/app/src/main/assets/
+/StyleTransfer/logs/
+/StyleTransfer/data/
+/StyleTransfer/outputs/images
+/StyleTransferAppTensorflow/app/src/main/assets/
+/StyleTransferAppTensorflow/app/src/main/gen/
+
 
 tt/
 
