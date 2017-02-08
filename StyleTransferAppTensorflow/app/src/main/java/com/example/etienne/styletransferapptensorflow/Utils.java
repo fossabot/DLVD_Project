@@ -60,6 +60,14 @@ public class Utils {
 
 
     public static int clamp(int num,int min,int max) {
-        return num <= min ? min : num >= max ? max : num;
+        if (num <= min){
+           // Log.d("Entered clamping","Min");
+            return min;
+        }else if(num >= max){
+            //Log.d("Entered clamping","Max");
+            return max;
+        }else{
+            return num;
+        }
     }
 }
