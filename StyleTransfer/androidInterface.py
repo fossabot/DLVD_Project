@@ -41,8 +41,8 @@ def export_checkpoint_to_android(tf):
     loading_directory = "\\version_60_k"
     saving_directory = "\\version_60_k"
 
-    width = conf.FULL_HD_WIDTH
-    ratio = conf.FULL_HD_RATIO
+    width = conf.ANDROID_WIDTH
+    ratio = conf.ANDROID_RATIO
     height = int(width * ratio)
 
     with tf.Session() as sess:
