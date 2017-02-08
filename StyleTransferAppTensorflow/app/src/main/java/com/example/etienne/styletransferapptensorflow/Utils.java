@@ -57,4 +57,9 @@ public class Utils {
         canvas.drawBitmap(bitmap, transformation, paint);
         return background;
     }
+
+
+    public static int clamp(int num,int min,int max) {
+        return num <= min ? min : num >= max ? max : num;
+    }
 }

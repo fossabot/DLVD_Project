@@ -3,6 +3,7 @@ package com.example.etienne.styletransferapptensorflow;
 
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.os.AsyncTask;
 import android.util.Log;
 import android.widget.TextView;
@@ -14,9 +15,9 @@ import org.tensorflow.contrib.android.TensorFlowInferenceInterface;
 public class Model {
     private static String MODEL_FILE;
     private static final String INPUT_NODE = "ph_input_image";
-    private static final String OUTPUT_NODE = "output:0";
-    private static final int DESIRED_HEIGHT = 630;
-    private static final int DESIRED_WIDTH = 630;
+    private static final String OUTPUT_NODE = "output";
+    private static final int DESIRED_HEIGHT = 832;
+    private static final int DESIRED_WIDTH = 468;
     private AssetManager am;
 
     TensorFlowInferenceInterface tensorFlowInferenceInterface;
@@ -52,7 +53,7 @@ public class Model {
 
 
         tensorFlowInferenceInterface.fillNodeFloat(
-                INPUT_NODE, new int[] {1, bm.getWidth(), bm.getHeight(), 3}, floatValues);
+                INPUT_NODE, new int[] {1,bm.getHeight(),bm.getWidth(), 3}, floatValues);
         Log.d("Checkpoint","Created Input Node");
 
 
@@ -71,9 +72,18 @@ public class Model {
         for (int i = 0; i < colors.length; i ++ ) {
             colors[i] =
                     0xFF000000
-                            | (((int) (outputValues[i * 3] * 255)) << 16)
-                            | (((int) (outputValues[i * 3 + 1] * 255)) << 8)
-                            | ((int) (outputValues[i * 3 + 2] * 255));
+                            | (((int) (outputValues[i * 3])) << 16)
+                            | (((int) (outputValues[i * 3 + 1])) << 8)
+                            | ((int) (outputValues[i * 3 + 2]));
+
+            int r = Color.red(colors[i]);
+            r = Utils.clamp(r,0,255);
+            int g = Color.green(colors[i]);
+            g = Utils.clamp(g,0,255);
+            int b = Color.blue(colors[i]);
+            b = Utils.clamp(b,0,255);
+           colors[i] = Color.rgb(r,g,b);
+
         }
         toDraw.setPixels(colors, 0, toDraw.getWidth(), 0, 0, toDraw.getWidth(), toDraw.getHeight());
         return toDraw;
