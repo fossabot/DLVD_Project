@@ -173,6 +173,8 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
+# Python
+__pycache__/
 
 #Local Data
 *.tfmodel
