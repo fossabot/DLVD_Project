@@ -54,7 +54,7 @@ def _clip_2x2_border(tf, x):
     return tmp
 
 
-def build_gen_graph_deep(tf, trainable = True, variables_gen_filter = [], variables_gen_bias = [], variables_scalars = [], input_pictures = 1, input_resolution = 224, ratio=1.0):
+def build_gen_graph_deep(tf, trainable = True, variables_gen_filter = [], variables_gen_bias = [], variables_scalars = [], input_pictures = 1, width_res = 224, ratio=1.0):
 
     if trainable :
         variables_gen_filter = []
@@ -62,7 +62,7 @@ def build_gen_graph_deep(tf, trainable = True, variables_gen_filter = [], variab
         variables_scalars = []
 
     graph = {}
-    input_image = tf.placeholder('float32', [input_pictures, int(input_resolution * ratio), input_resolution, 3], name="ph_input_image")
+    input_image = tf.placeholder('float32', [input_pictures, int(width_res * ratio), width_res, 3], name="ph_input_image")
 
     graph['conv1_0'] = _relu(tf,
                         _instance_norm(tf,

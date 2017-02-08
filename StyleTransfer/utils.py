@@ -30,7 +30,7 @@ def make_sure_path_exists(path):
 
 # returns image of shape [224, 224, 3]
 # [height, width, depth]
-def load_image(path, between_01=False, substract_mean=False, output_size=224, ratio=1.0):
+def load_image(path, between_01=False, substract_mean=False, width=224, ratio=1.0):
     # load image
     img = skimage.io.imread(conf.project_path + conf.images_path + path)
     #img = img / 255.0
@@ -45,37 +45,37 @@ def load_image(path, between_01=False, substract_mean=False, output_size=224, ra
     else:
         if ratio < 1.0:
             if img.shape[0] / img.shape[1] >= ratio:
-                crop_height = int(img.shape[0] * ratio)
+                crop_height = int(img.shape[1] * ratio)
                 crop_width = img.shape[1]
                 yy = int((img.shape[0] - crop_height) / 2)
                 crop_img = img[yy: yy + crop_height, 0: crop_width]
             if img.shape[0] / img.shape[1] < ratio:
                 crop_height = img.shape[0]
-                crop_width = int(img.shape[1] / ratio)
+                crop_width = int(img.shape[0] / ratio)
                 xx = int((img.shape[1] - crop_width) / 2)
                 crop_img = img[0: crop_height, xx: xx + crop_width]
         else:
             if img.shape[0] / img.shape[1] < ratio:
                 crop_height = img.shape[0]
-                crop_width = int(img.shape[1] / ratio)
+                crop_width = int(img.shape[0] / ratio)
                 xx = int((img.shape[1] - crop_width) / 2)
                 crop_img = img[0: + crop_height, xx: xx + crop_width]
             if img.shape[0] / img.shape[1] >= ratio:
-                crop_height = img.shape[0] * ratio
+                crop_height = img.shape[1] * ratio
                 crop_width = img.shape[1]
                 yy = int((img.shape[0] - crop_height) / 2)
                 crop_img = img[yy: yy + crop_height, 0: crop_width]
 
 
     # resize to 224, 224
-    resized_img = skimage.transform.resize(crop_img, (int(output_size * ratio), output_size))
+    resized_img = skimage.transform.resize(crop_img, (int(width * ratio), width))
 
     if between_01==False :
         resized_img = resized_img * 255.0
 
     avg = 0
     if substract_mean==True:
-        avg = np.sum(resized_img) / (output_size*output_size*3.0)
+        avg = np.sum(resized_img) / (width * width * 3.0)
         resized_img -= avg
 
     return resized_img, avg
@@ -104,14 +104,14 @@ def load_pictures_for_feed(directory_path, recursive=False, gen_res=304, content
     for file in os.listdir(conf.project_path + conf.images_path + directory_path):
         full_path = os.path.join(conf.project_path + conf.images_path + directory_path, file)
         if os.path.isfile(full_path) and str(file)[-4:] == '.jpg' :
-            img, avg_img = load_image(directory_path + '\\' + str(file), between_01=True, output_size=gen_res)
+            img, avg_img = load_image(directory_path + '\\' + str(file), between_01=True, width=gen_res)
 
             if len(img.shape) < 3 or img.shape[2] != 3 :
                 print("Picture with less than 3 channels found : " + str(file) + "\t Picture will be skipped.")
                 continue
 
             images.append(img)
-            img, avg_img = load_image(directory_path + '\\' + str(file), between_01=True, output_size=content_res)
+            img, avg_img = load_image(directory_path + '\\' + str(file), between_01=True, width=content_res)
             content_images.append(img)
         else:
             if recursive and not os.path.isfile(full_path):

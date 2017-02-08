@@ -148,6 +148,7 @@ def calc_style_loss_64(graph, precomputed_style_grams):
         #style_loss5_1 = tf.div(style_loss5_1_nominator, style_loss5_1_denominator)
 
         style_l += style_loss1_1 + style_loss2_1 + style_loss3_1 + style_loss4_1
+
     return style_l
 
 
@@ -171,7 +172,7 @@ def main():
 
     pre_style_grams, pre_content_tensor = precompute_style_gram(style_red, content_input_images)
 
-    gen_graph, input_image, variables_gen_filter, variables_gen_bias, variables_scalars = gn.build_gen_graph_deep(tf, input_pictures=conf.BATCH_SIZE, input_resolution=conf.INPUT_RESOLUTION)
+    gen_graph, input_image, variables_gen_filter, variables_gen_bias, variables_scalars = gn.build_gen_graph_deep(tf, input_pictures=conf.BATCH_SIZE, width_res=conf.INPUT_RESOLUTION)
     gen_image = gen_graph['output']
 
     pre_content_tensor_shape= np.shape(pre_content_tensor)
@@ -189,9 +190,9 @@ def main():
 
     graph = vn.load_vgg_input(tf, batch)
 
-    content_loss = 7.5 * calc_content_loss(graph, content_layer)
-    style_loss = 5e2 * calc_style_loss_64(graph, pre_style_grams)
-    tv_loss = 1e2 * calc_tv_loss(gen_image)
+    content_loss = conf.CONTENT_WEIGHT * calc_content_loss(graph, content_layer)
+    style_loss = conf.STYLE_WEIGHT * calc_style_loss_64(graph, pre_style_grams)
+    tv_loss = conf.TV_WEIGHT * calc_tv_loss(gen_image)
     loss = content_loss + style_loss + tv_loss
 
     learning_rate = conf.LEARNING_RATE
