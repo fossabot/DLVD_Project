@@ -30,19 +30,45 @@ def make_sure_path_exists(path):
 
 # returns image of shape [224, 224, 3]
 # [height, width, depth]
-def load_image(path, between_01=False, substract_mean=False, output_size=224):
+def load_image(path, between_01=False, substract_mean=False, output_size=224, ratio=1.0):
     # load image
     img = skimage.io.imread(conf.project_path + conf.images_path + path)
     #img = img / 255.0
     #assert (0 <= img).all() and (img <= 1.0).all()
     # print "Original Image Shape: ", img.shape
     # we crop image from center
-    short_edge = min(img.shape[:2])
-    yy = int((img.shape[0] - short_edge) / 2)
-    xx = int((img.shape[1] - short_edge) / 2)
-    crop_img = img[yy: yy + short_edge, xx: xx + short_edge]
+    if ratio == 1.0:
+        short_edge = min(img.shape[:2])
+        yy = int((img.shape[0] - short_edge) / 2)
+        xx = int((img.shape[1] - short_edge) / 2)
+        crop_img = img[yy: yy + short_edge, xx: xx + short_edge]
+    else:
+        if ratio < 1.0:
+            if img.shape[0] / img.shape[1] >= ratio:
+                crop_height = int(img.shape[0] * ratio)
+                crop_width = img.shape[1]
+                yy = int((img.shape[0] - crop_height) / 2)
+                crop_img = img[yy: yy + crop_height, 0: crop_width]
+            if img.shape[0] / img.shape[1] < ratio:
+                crop_height = img.shape[0]
+                crop_width = int(img.shape[1] / ratio)
+                xx = int((img.shape[1] - crop_width) / 2)
+                crop_img = img[0: crop_height, xx: xx + crop_width]
+        else:
+            if img.shape[0] / img.shape[1] < ratio:
+                crop_height = img.shape[0]
+                crop_width = int(img.shape[1] / ratio)
+                xx = int((img.shape[1] - crop_width) / 2)
+                crop_img = img[0: + crop_height, xx: xx + crop_width]
+            if img.shape[0] / img.shape[1] >= ratio:
+                crop_height = img.shape[0] * ratio
+                crop_width = img.shape[1]
+                yy = int((img.shape[0] - crop_height) / 2)
+                crop_img = img[yy: yy + crop_height, 0: crop_width]
+
+
     # resize to 224, 224
-    resized_img = skimage.transform.resize(crop_img, (output_size, output_size))
+    resized_img = skimage.transform.resize(crop_img, (int(output_size * ratio), output_size))
 
     if between_01==False :
         resized_img = resized_img * 255.0

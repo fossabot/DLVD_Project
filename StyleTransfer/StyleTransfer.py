@@ -167,7 +167,7 @@ def main():
     random.shuffle(content_input_images)
     print("Done")
 
-    style_red, avg_style_red = utils.load_image("\\styles\\wave.jpg", between_01=True, substract_mean=False)
+    style_red, avg_style_red = utils.load_image("\\styles\\rain_princess.jpg", between_01=True, substract_mean=False)
 
     pre_style_grams, pre_content_tensor = precompute_style_gram(style_red, content_input_images)
 
@@ -228,8 +228,8 @@ def main():
         sess.run(init, feed)
 
 
-        loading_directory = "\\version_59_k"
-        saving_directory = "\\version_59_k"
+        loading_directory = "\\version_60_k"
+        saving_directory = "\\version_60_k"
         starting_pic_num = 0
 
         saver = nio.create_saver(tf, sess)
