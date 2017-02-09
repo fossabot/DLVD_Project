@@ -153,8 +153,10 @@ def calc_style_loss_64(graph, precomputed_style_grams):
 
 
 def calc_tv_loss(gen_image):
-    y_tv = tf.nn.l2_loss(gen_image[:, 1:, :, :] - gen_image[:, :conf.INPUT_RESOLUTION - 1, :, :])
-    x_tv = tf.nn.l2_loss(gen_image[:, :, 1:, :] - gen_image[:, :, :conf.INPUT_RESOLUTION - 1, :])
+    y_tv = tf.nn.l2_loss(gen_image[:, 1:, :, :]
+            - gen_image[:, :conf.INPUT_RESOLUTION - 1, :, :])
+    x_tv = tf.nn.l2_loss(gen_image[:, :, 1:, :]
+            - gen_image[:, :, :conf.INPUT_RESOLUTION - 1, :])
     return 2 * (x_tv + y_tv)
 
 def main():
@@ -231,7 +233,7 @@ def main():
 
         loading_directory = "\\version_60_k"
         saving_directory = "\\version_60_k"
-        starting_pic_num = 9500
+        starting_pic_num = 20500
 
         saver = nio.create_saver(tf, sess)
         nio.load_gen_last_checkpoint(tf, sess, saver, path=loading_directory)
@@ -252,7 +254,7 @@ def main():
 
         restore= False
         last_saved_iteration = 0
-        for i in range(40000):
+        for i in range(19500):
             if(i % 10 == 0):
                 print(i)
 
@@ -313,7 +315,7 @@ def main():
                         last_saved_iteration = i
                 else:
                     print("Restoring last checkpoint -> iteration : " + str(last_saved_iteration))
-                    nio.load_gen_last_checkpoint(sess, saver, path=saving_directory)
+                    nio.load_gen_last_checkpoint(tf, sess, saver, path=saving_directory)
                     restore = False
 
             sess.run(train_step, feed_dict=feed)
