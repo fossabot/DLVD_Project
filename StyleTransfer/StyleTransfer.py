@@ -153,8 +153,10 @@ def calc_style_loss_64(graph, precomputed_style_grams):
 
 
 def calc_tv_loss(gen_image):
-    y_tv = tf.nn.l2_loss(gen_image[:, 1:, :, :] - gen_image[:, :conf.INPUT_RESOLUTION - 1, :, :])
-    x_tv = tf.nn.l2_loss(gen_image[:, :, 1:, :] - gen_image[:, :, :conf.INPUT_RESOLUTION - 1, :])
+    y_tv = tf.nn.l2_loss(gen_image[:, 1:, :, :]
+            - gen_image[:, :conf.INPUT_RESOLUTION - 1, :, :])
+    x_tv = tf.nn.l2_loss(gen_image[:, :, 1:, :]
+            - gen_image[:, :, :conf.INPUT_RESOLUTION - 1, :])
     return 2 * (x_tv + y_tv)
 
 def main():
