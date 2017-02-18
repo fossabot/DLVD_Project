@@ -57,12 +57,12 @@ def export_checkpoint_to_android(tf):
 
 
 def test_android_gen(tf):
-    load_and_save_path = '\\version_60_k'
-    full_path = conf.output_generator + load_and_save_path
+    load_and_save_path = '\\Generatoren\\Wave'
+    full_path = load_and_save_path
 
-    image = "\\chicago.jpg"
-    width = conf.CHICAGO_WIDTH
-    ratio = conf.CHICAGO_RATIO
+    image = "\\2013-11-09.jpg"
+    width = conf.FULL_HD_WIDTH
+    ratio = conf.FULL_HD_RATIO
     height = int(width * ratio)
 
     content, avg_content_gen = utils.load_image(image, between_01=True, substract_mean=False, width=width, ratio=ratio)

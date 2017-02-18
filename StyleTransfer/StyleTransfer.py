@@ -231,9 +231,9 @@ def main():
         sess.run(init, feed)
 
 
-        loading_directory = "\\version_60_k"
-        saving_directory = "\\version_60_k"
-        starting_pic_num = 20500
+        loading_directory = "\\version_61_k"
+        saving_directory = "\\version_61_k"
+        starting_pic_num = 0
 
         saver = nio.create_saver(tf, sess)
         nio.load_gen_last_checkpoint(tf, sess, saver, path=loading_directory)
@@ -254,7 +254,7 @@ def main():
 
         restore= False
         last_saved_iteration = 0
-        for i in range(19500):
+        for i in range(40000):
             if(i % 10 == 0):
                 print(i)
 
